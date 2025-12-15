@@ -6,7 +6,6 @@ import router from '@ohos.router'
 import promptAction from '@ohos.promptAction'
 import { TaskStore } from '../store/taskStore'
 import { Theme } from '../common/theme'
-import { isSuccess } from '../model/Result'
 
 @Entry
 @Component
@@ -94,11 +93,11 @@ struct TaskEditPage {
       description: this.description.trim() || undefined
     })
 
-    if (isSuccess(result)) {
+    if (result.ok) {
       promptAction.showToast({ message: '任务已创建' })
       router.back()
     } else {
-      promptAction.showToast({ message: result.message })
+      promptAction.showToast({ message: result.message ?? 'Unknown error' })
     }
   }
 }

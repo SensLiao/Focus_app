@@ -11,7 +11,6 @@ import { FocusTimer } from '../components/FocusTimer'
 import { BreakTimer } from '../components/BreakTimer'
 import { Theme } from '../common/theme'
 import { Constants } from '../common/constants'
-import { isSuccess } from '../model/Result'
 
 @Entry
 @Component
@@ -137,53 +136,53 @@ struct FocusPage {
   // 暂停专注
   private async pauseFocus() {
     const result = await FocusStore.pauseFocus()
-    if (isSuccess(result)) {
+    if (result.ok) {
       promptAction.showToast({ message: '已暂停' })
     } else {
-      promptAction.showToast({ message: result.message })
+      promptAction.showToast({ message: result.message ?? 'Unknown error' })
     }
   }
 
   // 继续专注
   private async resumeFocus() {
     const result = await FocusStore.resumeFocus()
-    if (isSuccess(result)) {
+    if (result.ok) {
       promptAction.showToast({ message: '已继续' })
     } else {
-      promptAction.showToast({ message: result.message })
+      promptAction.showToast({ message: result.message ?? 'Unknown error' })
     }
   }
 
   // 开始休息
   private async startBreak() {
     const result = await FocusStore.startBreak(Constants.DEFAULT_BREAK_DURATION)
-    if (isSuccess(result)) {
+    if (result.ok) {
       promptAction.showToast({ message: '开始休息' })
     } else {
-      promptAction.showToast({ message: result.message })
+      promptAction.showToast({ message: result.message ?? 'Unknown error' })
     }
   }
 
   // 结束休息
   private async finishBreak() {
     const result = await FocusStore.finishBreak()
-    if (isSuccess(result)) {
+    if (result.ok) {
       promptAction.showToast({ message: '休息结束' })
       // 自动继续专注
       await this.resumeFocus()
     } else {
-      promptAction.showToast({ message: result.message })
+      promptAction.showToast({ message: result.message ?? 'Unknown error' })
     }
   }
 
   // 结束专注
   private async finishFocus() {
     const result = await FocusStore.finishFocus()
-    if (isSuccess(result)) {
+    if (result.ok) {
       promptAction.showToast({ message: '专注已完成' })
       router.back()
     } else {
-      promptAction.showToast({ message: result.message })
+      promptAction.showToast({ message: result.message ?? 'Unknown error' })
     }
   }
 

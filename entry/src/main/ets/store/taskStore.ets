@@ -5,7 +5,7 @@
 
 import { Task, TaskCreateDTO, TaskUpdateDTO } from '../model/Task'
 import { TaskRepo } from '../data/TaskRepo'
-import { Result, isSuccess, success, fail } from '../model/Result'
+import { Result, success, fail } from '../model/Result'
 import { Logger } from '../common/logger'
 
 @Observed
@@ -47,17 +47,16 @@ export class TaskStore {
     TaskStore.state.error = null
 
     const result = await TaskRepo.findActive(TaskStore.context)
-
-    if (isSuccess(result)) {
+    if (result.ok && result.data) {
       TaskStore.state.tasks = result.data
       TaskStore.state.loading = false
       Logger.info(`Loaded ${result.data.length} tasks`)
       return success(undefined)
     } else {
-      TaskStore.state.error = result.message
+      TaskStore.state.error = result.message ?? null
       TaskStore.state.loading = false
-      Logger.error('Failed to load tasks', result.message)
-      return result
+      Logger.error('Failed to load tasks', result.message ?? 'Unknown error')
+      return fail(result.code ?? 'UNKNOWN', result.message ?? 'Unknown error')
     }
   }
 
@@ -71,7 +70,7 @@ export class TaskStore {
 
     const result = await TaskRepo.create(TaskStore.context, dto)
 
-    if (isSuccess(result)) {
+    if (result.ok) {
       await TaskStore.loadTasks()
       Logger.info('Task created and tasks reloaded')
     }
@@ -89,7 +88,7 @@ export class TaskStore {
 
     const result = await TaskRepo.update(TaskStore.context, id, dto)
 
-    if (isSuccess(result)) {
+    if (result.ok) {
       await TaskStore.loadTasks()
       Logger.info('Task updated and tasks reloaded')
     }
@@ -107,7 +106,7 @@ export class TaskStore {
 
     const result = await TaskRepo.delete(TaskStore.context, id)
 
-    if (isSuccess(result)) {
+    if (result.ok) {
       await TaskStore.loadTasks()
       Logger.info('Task deleted and tasks reloaded')
     }

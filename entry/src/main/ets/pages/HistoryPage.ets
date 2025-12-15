@@ -6,7 +6,6 @@ import router from '@ohos.router'
 import { TaskRepo } from '../data/TaskRepo'
 import { Task } from '../model/Task'
 import { Theme } from '../common/theme'
-import { isSuccess } from '../model/Result'
 
 @Entry
 @Component
@@ -133,7 +132,7 @@ struct HistoryPage {
   private async loadCompletedTasks() {
     this.loading = true
     const result = await TaskRepo.findCompleted(getContext(this))
-    if (isSuccess(result)) {
+    if (result.ok && result.data) {
       this.completedTasks = result.data
     }
     this.loading = false
