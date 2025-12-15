@@ -12,7 +12,7 @@ import { BreakRepo } from '../data/BreakRepo'
 import { TaskRepo } from '../data/TaskRepo'
 import { TimerService } from '../services/TimerService'
 import { ReminderService } from '../services/ReminderService'
-import { Result, isSuccess, success, fail } from '../model/Result'
+import { Result, success, fail } from '../model/Result'
 import { Logger } from '../common/logger'
 import { Constants } from '../common/constants'
 
@@ -48,7 +48,6 @@ export class FocusStore {
   static getState(): FocusState {
     return FocusStore.state
   }
-
   /**
    * 开始专注（新会话）
    */
@@ -69,10 +68,9 @@ export class FocusStore {
       startAt: now
     })
 
-    if (!isSuccess(sessionResult)) {
-      return sessionResult
+    if (!sessionResult.ok) {
+      return fail(sessionResult.code, sessionResult.message)
     }
-
     const sessionId = sessionResult.data
 
     // 创建第一个专注段
@@ -82,8 +80,8 @@ export class FocusStore {
       startAt: now
     })
 
-    if (!isSuccess(segmentResult)) {
-      return segmentResult
+    if (!segmentResult.ok) {
+      return fail(segmentResult.code, segmentResult.message)
     }
 
     // 更新状态
@@ -169,15 +167,13 @@ export class FocusStore {
 
     const now = Date.now()
     const sessionId = FocusStore.state.currentSession.id
-
     // 获取当前会话的最后一个段索引
     const segmentsResult = await SegmentRepo.findBySessionId(FocusStore.context, sessionId)
-    if (!isSuccess(segmentsResult)) {
-      return segmentsResult
+    if (!segmentsResult.ok) {
+      return fail(segmentsResult.code, segmentsResult.message)
     }
 
     const nextIndex = segmentsResult.data.length + 1
-
     // 创建新的专注段
     const segmentResult = await SegmentRepo.create(FocusStore.context, {
       sessionId: sessionId,
@@ -185,8 +181,8 @@ export class FocusStore {
       startAt: now
     })
 
-    if (!isSuccess(segmentResult)) {
-      return segmentResult
+    if (!segmentResult.ok) {
+      return fail(segmentResult.code, segmentResult.message)
     }
 
     // 更新会话状态
@@ -246,11 +242,10 @@ export class FocusStore {
       totalDuration: totalDuration,
       interruptionReason: Constants.INTERRUPTION_USER_FINISHED
     })
-
     // 如果关联了任务，更新任务的总专注时间并完成
     if (session.taskId !== undefined) {
       const taskResult = await TaskRepo.findById(FocusStore.context, session.taskId)
-      if (isSuccess(taskResult)) {
+      if (taskResult.ok) {
         const task = taskResult.data
         await TaskRepo.update(FocusStore.context, session.taskId, {
           completedAt: now,
@@ -279,7 +274,6 @@ export class FocusStore {
 
     const now = Date.now()
     const sessionId = FocusStore.state.currentSession.id
-
     // 创建休息事件
     const breakResult = await BreakRepo.create(FocusStore.context, {
       sessionId: sessionId,
@@ -287,8 +281,8 @@ export class FocusStore {
       plannedDuration: durationMs
     })
 
-    if (!isSuccess(breakResult)) {
-      return breakResult
+    if (!breakResult.ok) {
+      return fail(breakResult.code, breakResult.message)
     }
 
     // 更新会话休息次数
@@ -305,7 +299,7 @@ export class FocusStore {
 
     // 创建休息结束提醒
     const reminderResult = await ReminderService.createBreakEndReminder(durationMs)
-    if (isSuccess(reminderResult)) {
+    if (reminderResult.ok) {
       FocusStore.state.breakReminderId = reminderResult.data
     }
 
@@ -360,7 +354,7 @@ export class FocusStore {
 
       // 创建返回提醒
       const result = await ReminderService.createReturnReminder()
-      if (isSuccess(result)) {
+      if (result.ok) {
         FocusStore.state.returnReminderId = result.data
       }
 
@@ -390,7 +384,7 @@ export class FocusStore {
     }
 
     const result = await SessionRepo.findRunning(FocusStore.context)
-    if (!isSuccess(result) || result.data === null) {
+    if (!result.ok || result.data === null) {
       return result
     }
 

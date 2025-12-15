@@ -10,7 +10,6 @@ import { Task } from '../model/Task'
 import { TaskItem } from '../components/TaskItem'
 import { Theme } from '../common/theme'
 import { Logger } from '../common/logger'
-import { isSuccess } from '../model/Result'
 
 @Entry
 @Component
@@ -26,7 +25,7 @@ struct Index {
 
     // 检查未完成的会话
     const recoverResult = await FocusStore.checkAndRecoverSession()
-    if (isSuccess(recoverResult) && recoverResult.data !== null) {
+    if (recoverResult.ok && recoverResult.data !== null && recoverResult.data !== undefined) {
       const session = recoverResult.data
       // 查找任务标题
       if (session.taskId) {
@@ -132,30 +131,30 @@ struct Index {
   // 无任务开始专注
   private async startFocusWithoutTask() {
     const result = await FocusStore.startFocus()
-    if (isSuccess(result)) {
+    if (result.ok) {
       router.pushUrl({ url: 'pages/FocusPage' })
     } else {
-      promptAction.showToast({ message: result.message })
+      promptAction.showToast({ message: result.message ?? 'Unknown error' })
     }
   }
 
   // 有任务开始专注
   private async startFocusWithTask(task: Task) {
     const result = await FocusStore.startFocus(task.id)
-    if (isSuccess(result)) {
+    if (result.ok) {
       router.pushUrl({ url: 'pages/FocusPage' })
     } else {
-      promptAction.showToast({ message: result.message })
+      promptAction.showToast({ message: result.message ?? 'Unknown error' })
     }
   }
 
   // 删除任务
   private async deleteTask(task: Task) {
     const result = await TaskStore.deleteTask(task.id)
-    if (isSuccess(result)) {
+    if (result.ok) {
       promptAction.showToast({ message: '任务已删除' })
     } else {
-      promptAction.showToast({ message: result.message })
+      promptAction.showToast({ message: result.message ?? 'Unknown error' })
     }
   }
 }
