@@ -5,7 +5,7 @@
 
 import relationalStore from '@ohos.data.relationalStore'
 import { Result, success, fail } from '../model/Result'
-import { FocusSession, FocusSessionCreateDTO, FocusSessionUpdateDTO } from '../model/FocusSession'
+import { FocusSession, FocusSessionCreateDTO, FocusSessionUpdateDTO, SessionType } from '../model/FocusSession'
 import { SessionStatus } from '../model/SessionStatus'
 import { RdbClient } from './RdbClient'
 import { Logger } from '../common/logger'
@@ -24,7 +24,11 @@ export class SessionRepo {
         status: SessionStatus.RUNNING,
         actual_focus_duration: 0,
         total_duration: 0,
-        break_count: 0
+        break_count: 0,
+        session_type: dto.sessionType ?? SessionType.NORMAL,
+        time_limit_ms: dto.timeLimitMs ?? null,
+        rest_interval_ms: dto.restIntervalMs ?? null,
+        rest_duration_ms: dto.restDurationMs ?? null
       }
 
       const rowId = await store.insert('focus_sessions', valueBucket)
@@ -61,6 +65,9 @@ export class SessionRepo {
       }
       if (dto.interruptionReason !== undefined) {
         valueBucket.interruption_reason = dto.interruptionReason
+      }
+      if (dto.timeLimitMs !== undefined) {
+        valueBucket.time_limit_ms = dto.timeLimitMs
       }
 
       const predicates = new relationalStore.RdbPredicates('focus_sessions')
@@ -176,7 +183,58 @@ export class SessionRepo {
       breakCount: resultSet.getLong(resultSet.getColumnIndex('break_count')),
       interruptionReason: resultSet.isColumnNull(resultSet.getColumnIndex('interruption_reason'))
         ? undefined
-        : resultSet.getString(resultSet.getColumnIndex('interruption_reason'))
+        : resultSet.getString(resultSet.getColumnIndex('interruption_reason')),
+      sessionType: (resultSet.getString(resultSet.getColumnIndex('session_type')) ?? SessionType.NORMAL) as SessionType,
+      timeLimitMs: resultSet.isColumnNull(resultSet.getColumnIndex('time_limit_ms'))
+        ? undefined
+        : resultSet.getLong(resultSet.getColumnIndex('time_limit_ms')),
+      restIntervalMs: resultSet.isColumnNull(resultSet.getColumnIndex('rest_interval_ms'))
+        ? undefined
+        : resultSet.getLong(resultSet.getColumnIndex('rest_interval_ms')),
+      restDurationMs: resultSet.isColumnNull(resultSet.getColumnIndex('rest_duration_ms'))
+        ? undefined
+        : resultSet.getLong(resultSet.getColumnIndex('rest_duration_ms'))
     }
+  }
+
+  /**
+   * 更新会话的时长（actualFocusDuration 和 totalDuration）
+   */
+  static async updateDurations(
+    context: Context,
+    sessionId: number,
+    actualFocusDuration: number,
+    totalDuration: number
+  ): Promise<Result<void>> {
+    return await SessionRepo.update(context, sessionId, {
+      actualFocusDuration,
+      totalDuration
+    })
+  }
+
+  /**
+   * 设置中断原因
+   */
+  static async setInterruptionReason(
+    context: Context,
+    sessionId: number,
+    reason: string
+  ): Promise<Result<void>> {
+    return await SessionRepo.update(context, sessionId, {
+      interruptionReason: reason
+    })
+  }
+
+  /**
+   * 更新时限（延长倒计时）
+   */
+  static async updateTimeLimit(
+    context: Context,
+    sessionId: number,
+    newTimeLimitMs: number
+  ): Promise<Result<void>> {
+    return await SessionRepo.update(context, sessionId, {
+      timeLimitMs: newTimeLimitMs
+    })
   }
 }

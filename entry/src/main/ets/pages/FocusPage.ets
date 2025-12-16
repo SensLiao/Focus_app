@@ -7,6 +7,7 @@ import promptAction from '@ohos.promptAction'
 import { FocusStore, FocusState } from '../store/focusStore'
 import { TaskStore } from '../store/taskStore'
 import { SessionStatus } from '../model/SessionStatus'
+import { SessionType } from '../model/FocusSession'
 import { FocusTimer } from '../components/FocusTimer'
 import { BreakTimer } from '../components/BreakTimer'
 import { Theme } from '../common/theme'
@@ -49,14 +50,28 @@ struct FocusPage {
           // 休息计时器
           BreakTimer({
             elapsedMs: this.focusState.breakElapsedTime,
-            plannedDurationMs: this.focusState.breakDuration
+            plannedDurationMs: this.focusState.breakDuration,
+            onSkip: () => {
+              this.skipBreak()
+            },
+            onExtend: () => {
+              this.extendBreak()
+            }
           })
         } else {
           // 专注计时器
           FocusTimer({
             elapsedMs: this.focusState.elapsedTime,
+            remainingMs: this.focusState.remainingTime,
+            isCountdown: this.focusState.currentSession?.sessionType === SessionType.COUNTDOWN,
             segmentIndex: this.focusState.currentSegment?.segmentIndex ?? 1,
-            taskTitle: this.taskTitle
+            taskTitle: this.taskTitle,
+            onExtend: () => {
+              this.extendTimeLimit()
+            },
+            onForceFinish: () => {
+              this.showForceFinishDialog()
+            }
           })
 
           // 提示文本
@@ -203,5 +218,58 @@ struct FocusPage {
         }
       }
     })
+  }
+
+  // 延长时限
+  private async extendTimeLimit() {
+    const result = await FocusStore.extendTimeLimit(5 * 60 * 1000) // 延长 5 分钟
+    if (result.ok) {
+      promptAction.showToast({ message: '已延长 5 分钟' })
+    } else {
+      promptAction.showToast({ message: result.message ?? 'Unknown error' })
+    }
+  }
+
+  // 显示强制结束对话框（需要输入原因）
+  private showForceFinishDialog() {
+    AlertDialog.show({
+      title: '强制结束专注',
+      message: '请输入中断原因',
+      confirm: {
+        value: '确定',
+        action: () => {
+          // 简化版：使用默认原因
+          this.finishFocusWithReason('用户强制结束')
+        }
+      },
+      cancel: () => {}
+    })
+  }
+
+  // 带原因结束专注
+  private async finishFocusWithReason(reason: string) {
+    await FocusStore.setInterruptionReason(reason)
+    await this.finishFocus()
+  }
+
+  // 跳过休息
+  private async skipBreak() {
+    const result = await FocusStore.skipBreak()
+    if (result.ok) {
+      promptAction.showToast({ message: '已跳过休息' })
+      await this.resumeFocus()
+    } else {
+      promptAction.showToast({ message: result.message ?? 'Unknown error' })
+    }
+  }
+
+  // 延长休息
+  private async extendBreak() {
+    const result = await FocusStore.extendBreak(5 * 60 * 1000) // 延长 5 分钟
+    if (result.ok) {
+      promptAction.showToast({ message: '休息时间已延长 5 分钟' })
+    } else {
+      promptAction.showToast({ message: result.message ?? 'Unknown error' })
+    }
   }
 }

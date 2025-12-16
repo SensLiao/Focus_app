@@ -8,6 +8,8 @@ import { Theme } from '../common/theme'
 export struct BreakTimer {
   @Prop elapsedMs: number = 0
   @Prop plannedDurationMs: number = 300000
+  onSkip?: () => void // 跳过休息回调
+  onExtend?: () => void // 延长休息回调
 
   build() {
     Column() {
@@ -38,6 +40,30 @@ export struct BreakTimer {
         .fontSize(Theme.FONT_SIZE_SMALL)
         .fontColor(Theme.COLOR_TEXT_SECONDARY)
         .margin({ top: Theme.SPACE_SMALL })
+
+      // 操作按钮
+      Row() {
+        Button('跳过休息')
+          .fontSize(Theme.FONT_SIZE_SMALL)
+          .backgroundColor(Theme.COLOR_WARNING)
+          .onClick(() => {
+            if (this.onSkip) {
+              this.onSkip()
+            }
+          })
+
+        Button('延长 5 分钟')
+          .fontSize(Theme.FONT_SIZE_SMALL)
+          .backgroundColor(Theme.COLOR_PRIMARY_LIGHT)
+          .margin({ left: Theme.SPACE_MEDIUM })
+          .onClick(() => {
+            if (this.onExtend) {
+              this.onExtend()
+            }
+          })
+      }
+      .margin({ top: Theme.SPACE_LARGE })
+      .justifyContent(FlexAlign.Center)
     }
     .width('100%')
     .justifyContent(FlexAlign.Center)

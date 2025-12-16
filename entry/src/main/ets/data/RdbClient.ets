@@ -9,6 +9,7 @@ import { Logger } from '../common/logger'
 
 export class RdbClient {
   private static store: relationalStore.RdbStore | null = null
+  private static readonly DB_VERSION = 2 // 升级版本以支持新字段
 
   /**
    * 获取 RDB Store 实例（单例）
@@ -32,9 +33,10 @@ export class RdbClient {
       await RdbClient.store.executeSql('PRAGMA foreign_keys = ON;')
       Logger.info('Foreign keys enabled')
 
-      // 初始化表结构
+      // 初始化表结构和迁移
       await RdbClient.initTables(RdbClient.store)
-      Logger.info('Tables initialized')
+      await RdbClient.migrate(RdbClient.store)
+      Logger.info('Tables initialized and migrated')
 
       return RdbClient.store
     } catch (error) {
@@ -117,6 +119,58 @@ export class RdbClient {
       // RDB Store 没有显式 close 方法，设置为 null 即可
       RdbClient.store = null
       Logger.info('RDB Store closed')
+    }
+  }
+
+  /**
+   * 数据库迁移
+   */
+  private static async migrate(store: relationalStore.RdbStore): Promise<void> {
+    try {
+      // 检查是否需要迁移（简单方式：检查列是否存在）
+      const checkSql = 'PRAGMA table_info(focus_sessions)'
+      const resultSet = await store.querySql(checkSql)
+      
+      let hasTimeLimitMs = false
+      let hasSessionType = false
+      let hasRestIntervalMs = false
+      let hasRestDurationMs = false
+      
+      while (resultSet.goToNextRow()) {
+        const columnName = resultSet.getString(1) // column name 在 index 1
+        if (columnName === 'time_limit_ms') hasTimeLimitMs = true
+        if (columnName === 'session_type') hasSessionType = true
+        if (columnName === 'rest_interval_ms') hasRestIntervalMs = true
+        if (columnName === 'rest_duration_ms') hasRestDurationMs = true
+      }
+      resultSet.close()
+
+      // 添加缺失的列
+      if (!hasTimeLimitMs) {
+        await store.executeSql('ALTER TABLE focus_sessions ADD COLUMN time_limit_ms INTEGER')
+        Logger.info('Added time_limit_ms column')
+      }
+      
+      if (!hasSessionType) {
+        await store.executeSql("ALTER TABLE focus_sessions ADD COLUMN session_type TEXT DEFAULT 'NORMAL' CHECK(session_type IN ('NORMAL','COUNTDOWN','POMODORO'))")
+        Logger.info('Added session_type column')
+      }
+      
+      if (!hasRestIntervalMs) {
+        await store.executeSql('ALTER TABLE focus_sessions ADD COLUMN rest_interval_ms INTEGER')
+        Logger.info('Added rest_interval_ms column')
+      }
+      
+      if (!hasRestDurationMs) {
+        await store.executeSql('ALTER TABLE focus_sessions ADD COLUMN rest_duration_ms INTEGER')
+        Logger.info('Added rest_duration_ms column')
+      }
+      
+      // interruption_reason 已在原表中定义
+      Logger.info('Database migration completed')
+    } catch (error) {
+      Logger.error('Database migration failed', JSON.stringify(error))
+      // 不抛出错误，允许继续运行（可能列已存在）
     }
   }
 }
