@@ -3,7 +3,7 @@
  * 提供专注会话的状态容器和操作
  */
 
-import { FocusSession } from '../model/FocusSession'
+import { FocusSession, SessionType } from '../model/FocusSession'
 import { FocusSegment } from '../model/FocusSegment'
 import { SessionStatus } from '../model/SessionStatus'
 import { SessionRepo } from '../data/SessionRepo'
@@ -28,6 +28,7 @@ export class FocusState {
   breakElapsedTime: number = 0
   returnReminderId: number = -1
   breakReminderId: number = -1
+  remainingTime: number = 0 // 倒计时剩余时间（ms）
 }
 
 export class FocusStore {
@@ -51,7 +52,13 @@ export class FocusStore {
   /**
    * 开始专注（新会话）
    */
-  static async startFocus(taskId?: number): Promise<Result<void>> {
+  static async startFocus(
+    taskId?: number,
+    timeLimitMs?: number,
+    sessionType?: SessionType,
+    restIntervalMs?: number,
+    restDurationMs?: number
+  ): Promise<Result<void>> {
     if (!FocusStore.context) {
       return fail('NOT_INIT', 'Store未初始化')
     }
@@ -65,7 +72,11 @@ export class FocusStore {
     // 创建会话
     const sessionResult = await SessionRepo.create(FocusStore.context, {
       taskId: taskId,
-      startAt: now
+      startAt: now,
+      timeLimitMs: timeLimitMs,
+      sessionType: sessionType ?? SessionType.NORMAL,
+      restIntervalMs: restIntervalMs,
+      restDurationMs: restDurationMs
     })
 
     if (!sessionResult.ok) {
@@ -92,7 +103,11 @@ export class FocusStore {
       status: SessionStatus.RUNNING,
       actualFocusDuration: 0,
       totalDuration: 0,
-      breakCount: 0
+      breakCount: 0,
+      sessionType: sessionType ?? SessionType.NORMAL,
+      timeLimitMs: timeLimitMs,
+      restIntervalMs: restIntervalMs,
+      restDurationMs: restDurationMs
     }
 
     FocusStore.state.currentSegment = {
@@ -105,13 +120,24 @@ export class FocusStore {
 
     FocusStore.state.currentTaskId = taskId ?? null
     FocusStore.state.elapsedTime = 0
+    FocusStore.state.remainingTime = timeLimitMs ?? 0
 
-    // 启动计时器
+    // 启动计时器（倒计时模式或普通模式）
     TimerService.start((elapsedMs) => {
       FocusStore.state.elapsedTime = elapsedMs
+      
+      // 倒计时模式更新剩余时间
+      if (timeLimitMs && timeLimitMs > 0) {
+        FocusStore.state.remainingTime = Math.max(0, timeLimitMs - elapsedMs)
+        
+        // 倒计时结束自动完成
+        if (FocusStore.state.remainingTime <= 0) {
+          FocusStore.finishFocus()
+        }
+      }
     })
 
-    Logger.info(`Focus started for task ${taskId ?? 'anonymous'}`)
+    Logger.info(`Focus started for task ${taskId ?? 'anonymous'}, type: ${sessionType ?? SessionType.NORMAL}`)
     return success(undefined)
   }
 
@@ -413,5 +439,96 @@ export class FocusStore {
     FocusStore.state.breakElapsedTime = 0
     FocusStore.state.returnReminderId = -1
     FocusStore.state.breakReminderId = -1
+    FocusStore.state.remainingTime = 0
+  }
+
+  /**
+   * 延长时限（倒计时模式）
+   */
+  static async extendTimeLimit(additionalMs: number): Promise<Result<void>> {
+    if (!FocusStore.context || !FocusStore.state.currentSession) {
+      return fail('NO_SESSION', '无进行中的会话')
+    }
+
+    const session = FocusStore.state.currentSession
+    if (!session.timeLimitMs || session.timeLimitMs <= 0) {
+      return fail('NOT_COUNTDOWN', '非倒计时模式')
+    }
+
+    const newTimeLimit = session.timeLimitMs + additionalMs
+    
+    // 更新数据库
+    await SessionRepo.updateTimeLimit(FocusStore.context, session.id, newTimeLimit)
+    
+    // 更新状态
+    FocusStore.state.currentSession.timeLimitMs = newTimeLimit
+    FocusStore.state.remainingTime = newTimeLimit - FocusStore.state.elapsedTime
+
+    Logger.info(`Time limit extended by ${additionalMs}ms, new limit: ${newTimeLimit}ms`)
+    return success(undefined)
+  }
+
+  /**
+   * 设置中断原因
+   */
+  static async setInterruptionReason(reason: string): Promise<Result<void>> {
+    if (!FocusStore.context || !FocusStore.state.currentSession) {
+      return fail('NO_SESSION', '无进行中的会话')
+    }
+
+    await SessionRepo.setInterruptionReason(FocusStore.context, FocusStore.state.currentSession.id, reason)
+    FocusStore.state.currentSession.interruptionReason = reason
+
+    Logger.info(`Interruption reason set: ${reason}`)
+    return success(undefined)
+  }
+
+  /**
+   * 跳过休息
+   */
+  static async skipBreak(): Promise<Result<void>> {
+    if (!FocusStore.state.isBreaking) {
+      return fail('NOT_BREAKING', '未在休息中')
+    }
+
+    TimerService.stop()
+    
+    // 取消提醒
+    if (FocusStore.state.breakReminderId !== -1) {
+      await ReminderService.cancelReminder(FocusStore.state.breakReminderId)
+      FocusStore.state.breakReminderId = -1
+    }
+
+    FocusStore.state.isBreaking = false
+    FocusStore.state.breakStartAt = null
+    FocusStore.state.breakElapsedTime = 0
+
+    Logger.info('Break skipped')
+    return success(undefined)
+  }
+
+  /**
+   * 延长休息
+   */
+  static async extendBreak(additionalMs: number): Promise<Result<void>> {
+    if (!FocusStore.state.isBreaking) {
+      return fail('NOT_BREAKING', '未在休息中')
+    }
+
+    FocusStore.state.breakDuration += additionalMs
+    
+    // 取消旧提醒并创建新提醒
+    if (FocusStore.state.breakReminderId !== -1) {
+      await ReminderService.cancelReminder(FocusStore.state.breakReminderId)
+    }
+
+    const newRemainingTime = FocusStore.state.breakDuration - FocusStore.state.breakElapsedTime
+    const reminderResult = await ReminderService.createBreakEndReminder(newRemainingTime)
+    if (reminderResult.ok) {
+      FocusStore.state.breakReminderId = reminderResult.data
+    }
+
+    Logger.info(`Break extended by ${additionalMs}ms, new duration: ${FocusStore.state.breakDuration}ms`)
+    return success(undefined)
   }
 }

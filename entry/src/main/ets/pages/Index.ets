@@ -7,6 +7,7 @@ import promptAction from '@ohos.promptAction'
 import { TaskStore, TaskState } from '../store/taskStore'
 import { FocusStore } from '../store/focusStore'
 import { Task } from '../model/Task'
+import { SessionType } from '../model/FocusSession'
 import { TaskItem } from '../components/TaskItem'
 import { BottomNav } from '../components/BottomNav'
 import { Theme } from '../common/theme'
@@ -138,9 +139,68 @@ struct Index {
     }
   }
 
-  // 有任务开始专注
+  // 有任务开始专注（显示模式选择对话框）
   private async startFocusWithTask(task: Task) {
-    const result = await FocusStore.startFocus(task.id)
+    // 显示模式选择对话框
+    AlertDialog.show({
+      title: '选择专注模式',
+      message: '请选择你的专注方式',
+      buttons: [
+        {
+          value: '正计时',
+          action: () => {
+            this.startNormalFocus(task.id)
+          }
+        },
+        {
+          value: '倒计时 25分钟',
+          action: () => {
+            this.startCountdownFocus(task.id, 25)
+          }
+        },
+        {
+          value: '番茄钟',
+          action: () => {
+            this.startPomodoroFocus(task.id)
+          }
+        }
+      ]
+    })
+  }
+
+  // 正计时模式
+  private async startNormalFocus(taskId?: number) {
+    const result = await FocusStore.startFocus(taskId)
+    if (result.ok) {
+      router.pushUrl({ url: 'pages/FocusPage' })
+    } else {
+      promptAction.showToast({ message: result.message ?? 'Unknown error' })
+    }
+  }
+
+  // 倒计时模式
+  private async startCountdownFocus(taskId: number | undefined, durationMinutes: number) {
+    const result = await FocusStore.startFocus(
+      taskId,
+      durationMinutes * 60 * 1000, // 转换为毫秒
+      SessionType.COUNTDOWN
+    )
+    if (result.ok) {
+      router.pushUrl({ url: 'pages/FocusPage' })
+    } else {
+      promptAction.showToast({ message: result.message ?? 'Unknown error' })
+    }
+  }
+
+  // 番茄钟模式
+  private async startPomodoroFocus(taskId?: number) {
+    const result = await FocusStore.startFocus(
+      taskId,
+      25 * 60 * 1000, // 25分钟专注
+      SessionType.POMODORO,
+      25 * 60 * 1000, // 25分钟后休息
+      5 * 60 * 1000   // 5分钟休息
+    )
     if (result.ok) {
       router.pushUrl({ url: 'pages/FocusPage' })
     } else {
