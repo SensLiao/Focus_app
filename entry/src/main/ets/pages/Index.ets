@@ -1,5 +1,5 @@
 /**
- * 首页 - 任务列表
+ * 首页 - 任务列表（基于 Figma Design）
  */
 
 import router from '@ohos.router'
@@ -8,6 +8,7 @@ import { TaskStore, TaskState } from '../store/taskStore'
 import { FocusStore } from '../store/focusStore'
 import { Task } from '../model/Task'
 import { TaskItem } from '../components/TaskItem'
+import { BottomNav } from '../components/BottomNav'
 import { Theme } from '../common/theme'
 import { Logger } from '../common/logger'
 
@@ -43,89 +44,88 @@ struct Index {
   }
 
   build() {
-    Column() {
-      // 顶部导航
-      Row() {
-        Text('Focus 专注')
-          .fontSize(Theme.FONT_SIZE_LARGE)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(Theme.COLOR_TEXT_PRIMARY)
-
-        Blank()
-
-        Button('引导')
-          .fontSize(Theme.FONT_SIZE_SMALL)
-          .height(32)
-          .onClick(() => {
-            router.pushUrl({ url: 'pages/GuidePage' })
-          })
-
-        Button('历史')
-          .fontSize(Theme.FONT_SIZE_SMALL)
-          .height(32)
-          .margin({ left: Theme.SPACE_SMALL })
-          .onClick(() => {
-            router.pushUrl({ url: 'pages/HistoryPage' })
-          })
-      }
-      .width('100%')
-      .padding(Theme.SPACE_MEDIUM)
-
-      // 快速开始按钮
-      Button('快速开始专注（无任务）')
-        .width('90%')
-        .height(50)
-        .fontSize(Theme.FONT_SIZE_MEDIUM)
-        .backgroundColor(Theme.COLOR_SUCCESS)
-        .margin({ top: Theme.SPACE_MEDIUM })
-        .onClick(() => {
-          this.startFocusWithoutTask()
-        })
-
-      // 新建任务按钮
-      Button('+ 新建任务')
-        .width('90%')
-        .height(50)
-        .fontSize(Theme.FONT_SIZE_MEDIUM)
-        .backgroundColor(Theme.COLOR_PRIMARY)
-        .margin({ top: Theme.SPACE_MEDIUM })
-        .onClick(() => {
-          router.pushUrl({ url: 'pages/TaskEditPage' })
-        })
-
-      // 任务列表
-      if (this.taskState.loading) {
-        Text('加载中...')
-          .margin({ top: Theme.SPACE_LARGE })
-      } else if (this.taskState.tasks.length === 0) {
-        Text('暂无任务，点击上方按钮新建')
-          .fontSize(Theme.FONT_SIZE_SMALL)
-          .fontColor(Theme.COLOR_TEXT_SECONDARY)
-          .margin({ top: Theme.SPACE_LARGE })
-      } else {
-        List({ space: Theme.SPACE_MEDIUM }) {
-          ForEach(this.taskState.tasks, (task: Task) => {
-            ListItem() {
-              TaskItem({
-                task: task,
-                onStart: (t: Task) => {
-                  this.startFocusWithTask(t)
-                },
-                onDelete: (t: Task) => {
-                  this.deleteTask(t)
-                }
-              })
-            }
-          }, (task: Task) => task.id.toString())
+    Stack({ alignContent: Alignment.BottomEnd }) {
+      Column() {
+        // 顶部标题
+        Row() {
+          Text('Focus')
+            .fontSize(Theme.FONT_SIZE_TITLE)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(Theme.COLOR_TEXT_PRIMARY)
         }
         .width('100%')
-        .layoutWeight(1)
-        .padding({ left: Theme.SPACE_MEDIUM, right: Theme.SPACE_MEDIUM, top: Theme.SPACE_MEDIUM })
+        .padding(Theme.SPACE_MEDIUM)
+
+        // 任务列表或空状态
+        if (this.taskState.loading) {
+          Column() {
+            Text('加载中...')
+              .fontSize(Theme.FONT_SIZE_MEDIUM)
+              .fontColor(Theme.COLOR_TEXT_SECONDARY)
+          }
+          .layoutWeight(1)
+          .justifyContent(FlexAlign.Center)
+        } else if (this.taskState.tasks.length === 0) {
+          // 空状态
+          Column() {
+            Text('No tasks yet. Add your first task to get started!')
+              .fontSize(Theme.FONT_SIZE_MEDIUM)
+              .fontColor(Theme.COLOR_TEXT_TERTIARY)
+              .textAlign(TextAlign.Center)
+              .width('80%')
+          }
+          .layoutWeight(1)
+          .justifyContent(FlexAlign.Center)
+        } else {
+          // 任务列表
+          List({ space: Theme.SPACE_MEDIUM }) {
+            ForEach(this.taskState.tasks, (task: Task) => {
+              ListItem() {
+                TaskItem({
+                  task: task,
+                  onStart: (t: Task) => {
+                    this.startFocusWithTask(t)
+                  },
+                  onDelete: (t: Task) => {
+                    this.deleteTask(t)
+                  }
+                })
+              }
+            }, (task: Task) => task.id.toString())
+          }
+          .width('100%')
+          .layoutWeight(1)
+          .padding({ 
+            left: Theme.SPACE_MEDIUM, 
+            right: Theme.SPACE_MEDIUM, 
+            top: Theme.SPACE_SMALL,
+            bottom: Theme.SPACE_MEDIUM 
+          })
+        }
+
+        // 底部导航栏
+        BottomNav({ currentIndex: 0 })
       }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(Theme.COLOR_BACKGROUND)
+
+      // 浮动添加按钮
+      Button({ type: ButtonType.Circle }) {
+        Text('+')
+          .fontSize(32)
+          .fontColor(Color.White)
+      }
+      .width(56)
+      .height(56)
+      .backgroundColor(Theme.COLOR_PRIMARY)
+      .margin({ right: Theme.SPACE_MEDIUM, bottom: 80 })
+      .onClick(() => {
+        router.pushUrl({ url: 'pages/TaskEditPage' })
+      })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Theme.COLOR_BACKGROUND)
   }
 
   // 无任务开始专注
