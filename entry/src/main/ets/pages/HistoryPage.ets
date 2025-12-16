@@ -1,10 +1,11 @@
 /**
- * 历史页 - 已完成任务和专注记录
+ * 历史页 - 已完成任务和专注记录（基于 Figma Design）
  */
 
 import router from '@ohos.router'
 import { TaskRepo } from '../data/TaskRepo'
 import { Task } from '../model/Task'
+import { BottomNav } from '../components/BottomNav'
 import { Theme } from '../common/theme'
 
 @Entry
@@ -19,22 +20,13 @@ struct HistoryPage {
 
   build() {
     Column() {
-      // 顶部导航
+      // 顶部标题
       Row() {
-        Button('< 返回')
-          .fontSize(Theme.FONT_SIZE_SMALL)
-          .onClick(() => {
-            router.back()
-          })
-
-        Text('历史记录')
-          .fontSize(Theme.FONT_SIZE_LARGE)
+        Text('History')
+          .fontSize(Theme.FONT_SIZE_TITLE)
           .fontWeight(FontWeight.Bold)
+          .fontColor(Theme.COLOR_TEXT_PRIMARY)
           .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-
-        Text('')
-          .width(60)
       }
       .width('100%')
       .padding(Theme.SPACE_MEDIUM)
@@ -43,48 +35,64 @@ struct HistoryPage {
       Row({ space: Theme.SPACE_MEDIUM }) {
         Column() {
           Text(this.completedTasks.length.toString())
-            .fontSize(Theme.FONT_SIZE_LARGE)
+            .fontSize(28)
             .fontWeight(FontWeight.Bold)
             .fontColor(Theme.COLOR_PRIMARY)
 
-          Text('已完成任务')
+          Text('Completed Tasks')
             .fontSize(Theme.FONT_SIZE_SMALL)
             .fontColor(Theme.COLOR_TEXT_SECONDARY)
-            .margin({ top: 4 })
+            .margin({ top: Theme.SPACE_TINY })
         }
         .layoutWeight(1)
         .padding(Theme.SPACE_MEDIUM)
         .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
         .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
+        .border({
+          width: 1,
+          color: Theme.COLOR_BORDER
+        })
 
         Column() {
           Text(this.formatTotalTime())
-            .fontSize(Theme.FONT_SIZE_LARGE)
+            .fontSize(28)
             .fontWeight(FontWeight.Bold)
             .fontColor(Theme.COLOR_SUCCESS)
 
-          Text('总专注时长')
+          Text('Total Focus Time')
             .fontSize(Theme.FONT_SIZE_SMALL)
             .fontColor(Theme.COLOR_TEXT_SECONDARY)
-            .margin({ top: 4 })
+            .margin({ top: Theme.SPACE_TINY })
         }
         .layoutWeight(1)
         .padding(Theme.SPACE_MEDIUM)
         .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
         .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
+        .border({
+          width: 1,
+          color: Theme.COLOR_BORDER
+        })
       }
       .width('100%')
       .padding({ left: Theme.SPACE_MEDIUM, right: Theme.SPACE_MEDIUM })
 
       // 任务列表
       if (this.loading) {
-        Text('加载中...')
-          .margin({ top: Theme.SPACE_LARGE })
+        Column() {
+          Text('Loading...')
+            .fontSize(Theme.FONT_SIZE_MEDIUM)
+            .fontColor(Theme.COLOR_TEXT_SECONDARY)
+        }
+        .layoutWeight(1)
+        .justifyContent(FlexAlign.Center)
       } else if (this.completedTasks.length === 0) {
-        Text('暂无历史记录')
-          .fontSize(Theme.FONT_SIZE_SMALL)
-          .fontColor(Theme.COLOR_TEXT_SECONDARY)
-          .margin({ top: Theme.SPACE_LARGE })
+        Column() {
+          Text('No history yet')
+            .fontSize(Theme.FONT_SIZE_MEDIUM)
+            .fontColor(Theme.COLOR_TEXT_TERTIARY)
+        }
+        .layoutWeight(1)
+        .justifyContent(FlexAlign.Center)
       } else {
         List({ space: Theme.SPACE_MEDIUM }) {
           ForEach(this.completedTasks, (task: Task) => {
@@ -94,19 +102,20 @@ struct HistoryPage {
                   Text(task.title)
                     .fontSize(Theme.FONT_SIZE_MEDIUM)
                     .fontColor(Theme.COLOR_TEXT_PRIMARY)
+                    .fontWeight(FontWeight.Medium)
                     .maxLines(1)
                     .textOverflow({ overflow: TextOverflow.Ellipsis })
 
                   Text(this.formatDuration(task.totalFocusTime))
                     .fontSize(Theme.FONT_SIZE_SMALL)
                     .fontColor(Theme.COLOR_PRIMARY)
-                    .margin({ top: 4 })
+                    .margin({ top: Theme.SPACE_TINY })
 
                   if (task.completedAt) {
                     Text(this.formatDate(task.completedAt))
                       .fontSize(Theme.FONT_SIZE_SMALL)
                       .fontColor(Theme.COLOR_TEXT_SECONDARY)
-                      .margin({ top: 4 })
+                      .margin({ top: Theme.SPACE_TINY })
                   }
                 }
                 .alignItems(HorizontalAlign.Start)
@@ -116,13 +125,25 @@ struct HistoryPage {
               .padding(Theme.SPACE_MEDIUM)
               .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
               .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
+              .border({
+                width: 1,
+                color: Theme.COLOR_BORDER
+              })
             }
           }, (task: Task) => task.id.toString())
         }
         .width('100%')
         .layoutWeight(1)
-        .padding({ left: Theme.SPACE_MEDIUM, right: Theme.SPACE_MEDIUM, top: Theme.SPACE_MEDIUM })
+        .padding({ 
+          left: Theme.SPACE_MEDIUM, 
+          right: Theme.SPACE_MEDIUM, 
+          top: Theme.SPACE_MEDIUM,
+          bottom: Theme.SPACE_MEDIUM 
+        })
       }
+
+      // 底部导航栏
+      BottomNav({ currentIndex: 1 })
     }
     .width('100%')
     .height('100%')

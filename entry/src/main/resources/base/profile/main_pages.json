@@ -4,6 +4,7 @@
     "pages/FocusPage",
     "pages/TaskEditPage",
     "pages/GuidePage",
-    "pages/HistoryPage"
+    "pages/HistoryPage",
+    "pages/SettingsPage"
   ]
 }
