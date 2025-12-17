@@ -237,4 +237,107 @@ export class SessionRepo {
       timeLimitMs: newTimeLimitMs
     })
   }
+
+  /**
+   * 查询所有已完成的会话
+   */
+  static async findCompleted(context: Context, limit?: number): Promise<Result<FocusSession[]>> {
+    try {
+      const store = await RdbClient.getStore(context)
+      const predicates = new relationalStore.RdbPredicates('focus_sessions')
+      predicates.equalTo('status', SessionStatus.FINISHED)
+      predicates.orderByDesc('end_at')
+      if (limit) {
+        predicates.limitAs(limit)
+      }
+
+      const resultSet = await store.query(predicates)
+      const sessions: FocusSession[] = []
+
+      while (resultSet.goToNextRow()) {
+        sessions.push(SessionRepo.rowToSession(resultSet))
+      }
+      resultSet.close()
+
+      Logger.info(`Found ${sessions.length} completed sessions`)
+      return success(sessions)
+    } catch (error) {
+      Logger.error('Failed to find completed sessions', JSON.stringify(error))
+      return fail(Constants.ERROR_CODE_DB, '查询已完成会话失败')
+    }
+  }
+
+  /**
+   * 获取统计数据
+   */
+  static async getStats(context: Context): Promise<Result<SessionStats>> {
+    try {
+      const store = await RdbClient.getStore(context)
+
+      // 获取总专注时间
+      const totalTimeResult = await store.querySql(
+        'SELECT SUM(actual_focus_duration) as total FROM focus_sessions WHERE status = ?',
+        [SessionStatus.FINISHED]
+      )
+      let totalFocusTime = 0
+      if (totalTimeResult.goToFirstRow()) {
+        totalFocusTime = totalTimeResult.getLong(0) || 0
+      }
+      totalTimeResult.close()
+      // 获取总会话数
+      const sessionCountResult = await store.querySql(
+        'SELECT COUNT(*) as count FROM focus_sessions WHERE status = ?',
+        [SessionStatus.FINISHED]
+      )
+      let sessionCount = 0
+      if (sessionCountResult.goToFirstRow()) {
+        sessionCount = sessionCountResult.getLong(0) || 0
+      }
+      sessionCountResult.close()
+      // 获取总休息次数
+      const breakCountResult = await store.querySql(
+        'SELECT SUM(break_count) as total FROM focus_sessions WHERE status = ?',
+        [SessionStatus.FINISHED]
+      )
+      let totalBreaks = 0
+      if (breakCountResult.goToFirstRow()) {
+        totalBreaks = breakCountResult.getLong(0) || 0
+      }
+      breakCountResult.close()
+
+      // 今日专注时间
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const todayStart = today.getTime()
+      const todayResult = await store.querySql(
+        'SELECT SUM(actual_focus_duration) as total FROM focus_sessions WHERE status = ? AND start_at >= ?',
+        [SessionStatus.FINISHED, todayStart]
+      )
+      let todayFocusTime = 0
+      if (todayResult.goToFirstRow()) {
+        todayFocusTime = todayResult.getLong(0) || 0
+      }
+      todayResult.close()
+      Logger.info('Stats retrieved successfully')
+      return success({
+        totalFocusTime,
+        sessionCount,
+        totalBreaks,
+        todayFocusTime
+      } as SessionStats)
+    } catch (error) {
+      Logger.error('Failed to get stats', JSON.stringify(error))
+      return fail(Constants.ERROR_CODE_DB, '获取统计数据失败')
+    }
+  }
+}
+
+/**
+ * 会话统计数据
+ */
+export interface SessionStats {
+  totalFocusTime: number
+  sessionCount: number
+  totalBreaks: number
+  todayFocusTime: number
 }

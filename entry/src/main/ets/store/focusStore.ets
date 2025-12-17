@@ -21,6 +21,7 @@ export class FocusState {
   currentSession: FocusSession | null = null
   currentSegment: FocusSegment | null = null
   currentTaskId: number | null = null
+  currentBreakId: number | null = null
   isBreaking: boolean = false
   breakStartAt: number | null = null
   breakDuration: number = 0
@@ -290,7 +291,7 @@ export class FocusStore {
   /**
    * 开始休息
    */
-  static async startBreak(durationMs: number): Promise<Result<void>> {
+  static async startBreak(durationMs: number, reason?: string): Promise<Result<void>> {
     if (!FocusStore.context || !FocusStore.state.currentSession) {
       return fail('NO_SESSION', '无进行中的会话')
     }
@@ -300,16 +301,20 @@ export class FocusStore {
 
     const now = Date.now()
     const sessionId = FocusStore.state.currentSession.id
-    // 创建休息事件
+    // 创建休息事件（包含 reason）
     const breakResult = await BreakRepo.create(FocusStore.context, {
       sessionId: sessionId,
       startAt: now,
-      plannedDuration: durationMs
+      plannedDuration: durationMs,
+      reason: reason
     })
 
     if (!breakResult.ok) {
       return fail(breakResult.code, breakResult.message)
     }
+
+    // 保存 breakId 以便后续更新
+    const breakId = breakResult.data
 
     // 更新会话休息次数
     const newBreakCount = FocusStore.state.currentSession.breakCount + 1
@@ -318,6 +323,7 @@ export class FocusStore {
     })
 
     FocusStore.state.currentSession.breakCount = newBreakCount
+    FocusStore.state.currentBreakId = breakId
     FocusStore.state.isBreaking = true
     FocusStore.state.breakStartAt = now
     FocusStore.state.breakDuration = durationMs
@@ -345,7 +351,7 @@ export class FocusStore {
   /**
    * 结束休息
    */
-  static async finishBreak(): Promise<Result<void>> {
+  static async finishBreak(reason?: string): Promise<Result<void>> {
     if (!FocusStore.context || !FocusStore.state.isBreaking) {
       return fail('NOT_BREAKING', '未在休息中')
     }
@@ -353,12 +359,20 @@ export class FocusStore {
     const elapsedMs = TimerService.stop()
     const now = Date.now()
 
-    // 更新休息事件（简化版：假设只有一个最新的）
-    // 生产环境需要保存 breakId
+    // 更新休息事件
+    if (FocusStore.state.currentBreakId !== null) {
+      await BreakRepo.update(FocusStore.context, FocusStore.state.currentBreakId, {
+        endAt: now,
+        actualDuration: elapsedMs,
+        isSkipped: false,
+        reason: reason
+      })
+    }
 
     FocusStore.state.isBreaking = false
     FocusStore.state.breakStartAt = null
     FocusStore.state.breakElapsedTime = 0
+    FocusStore.state.currentBreakId = null
 
     // 取消提醒
     if (FocusStore.state.breakReminderId !== -1) {
@@ -427,12 +441,78 @@ export class FocusStore {
   }
 
   /**
+   * 恢复会话到当前状态并继续
+   */
+  static async recoverSession(session: FocusSession): Promise<Result<void>> {
+    if (!FocusStore.context) {
+      return fail('NOT_INIT', 'Store未初始化')
+    }
+
+    // 更新会话状态为运行中
+    await SessionRepo.update(FocusStore.context, session.id, {
+      status: SessionStatus.RUNNING,
+      interruptionReason: ''
+    })
+    // 恢复状态
+    FocusStore.state.currentSession = session
+    FocusStore.state.currentSession.status = SessionStatus.RUNNING
+    FocusStore.state.currentSession.interruptionReason = ''
+    FocusStore.state.currentTaskId = session.taskId ?? null
+    FocusStore.state.elapsedTime = session.actualFocusDuration
+    FocusStore.state.isBreaking = false
+
+    // 如果是倒计时模式，计算剩余时间
+    if (session.timeLimitMs && session.timeLimitMs > 0) {
+      FocusStore.state.remainingTime = Math.max(0, session.timeLimitMs - session.actualFocusDuration)
+    }
+
+    // 创建新的专注段
+    const now = Date.now()
+    const segmentIndex = (session.breakCount ?? 0) + 1
+    const segmentResult = await SegmentRepo.create(FocusStore.context, {
+      sessionId: session.id,
+      segmentIndex: segmentIndex,
+      startAt: now
+    })
+
+    if (segmentResult.ok && segmentResult.data !== undefined) {
+      FocusStore.state.currentSegment = {
+        id: segmentResult.data,
+        sessionId: session.id,
+        segmentIndex: segmentIndex,
+        startAt: now,
+        durationMs: 0
+      }
+    }
+
+    // 重新启动计时器，从已累计的时间继续
+    TimerService.start((elapsedMs) => {
+      // elapsedMs 是从启动计时器开始计算的时间，需要加上之前已累计的时间
+      FocusStore.state.elapsedTime = session.actualFocusDuration + elapsedMs
+
+      // 倒计时模式更新剩余时间
+      if (session.timeLimitMs && session.timeLimitMs > 0) {
+        FocusStore.state.remainingTime = Math.max(0, session.timeLimitMs - FocusStore.state.elapsedTime)
+
+        // 倒计时结束自动完成
+        if (FocusStore.state.remainingTime <= 0) {
+          FocusStore.finishFocus()
+        }
+      }
+    })
+
+    Logger.info(`Session ${session.id} recovered and resumed`)
+    return success(undefined)
+  }
+
+  /**
    * 清空状态
    */
   private static clearState(): void {
     FocusStore.state.currentSession = null
     FocusStore.state.currentSegment = null
     FocusStore.state.currentTaskId = null
+    FocusStore.state.currentBreakId = null
     FocusStore.state.isBreaking = false
     FocusStore.state.breakStartAt = null
     FocusStore.state.elapsedTime = 0

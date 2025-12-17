@@ -10,16 +10,19 @@ export interface BreakEvent {
   plannedDuration: number   // 计划休息时长（ms）
   actualDuration: number    // 实际休息时长（ms）
   isSkipped: boolean        // 是否跳过
+  reason?: string           // 休息/中断原因
 }
 
 export interface BreakEventCreateDTO {
   sessionId: number
   startAt: number
   plannedDuration: number
+  reason?: string
 }
 
 export interface BreakEventUpdateDTO {
   endAt?: number
   actualDuration?: number
   isSkipped?: boolean
+  reason?: string
 }

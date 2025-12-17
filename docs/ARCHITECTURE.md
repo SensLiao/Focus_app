@@ -1,8 +1,10 @@
-# Focus App MVP 架构设计文档
+# Focus App 架构设计文档
 
-> 版本：v1.0-mvp  
-> 日期：2025-12-14  
-> 模型：Stage 模型 + ArkTS + ArkUI + RDB
+> **版本**：v2.0  
+> **更新日期**：2025-12-17  
+> **模型**：Stage 模型 + ArkTS + ArkUI + RDB  
+> **设计参考**：[Figma Design Link](https://www.figma.com/make/jEnyNbwbbfW22y9kEwjNWP/Focus-App)  
+> **相关文档**：[FRONTEND_DESIGN.md](./FRONTEND_DESIGN.md) | [UI_DESIGN_SPECIFICATION.md](./UI_DESIGN_SPECIFICATION.md)
 
 ---
 
@@ -36,22 +38,44 @@
 ### 2.1 页面列表
 | 页面 | 路径 | 功能 |
 |------|------|------|
-| 首页（任务列表） | pages/Index | 任务 CRUD、快速开始专注 |
-| 专注页 | pages/FocusPage | 全屏计时、暂停/继续、休息 |
-| 引导页 | pages/GuidePage | 教学系统专注模式、跳转设置 |
-| 历史页 | pages/HistoryPage | 已完成任务、专注记录 |
-| 任务编辑页 | pages/TaskEditPage | 创建/编辑任务详情 |
+| 首页（任务列表） | pages/Index | 任务列表展示、快速专注入口、底部导航 |
+| 启动配置页 | pages/StartPage | 专注前配置（选择/创建任务、设置倒计时、休息间隔） |
+| 计时运行页 | pages/FocusPage | 全屏运行计时器、暂停/继续、休息模式切换（运行时称为TimerPage） |
+| 任务编辑页 | pages/TaskEditPage | 创建/编辑任务详情表单 |
+| 历史页 | pages/HistoryPage | 已完成任务、专注统计、会话详情 |
+| 引导页 | pages/GuidePage | 系统专注模式教学、跳转设置 |
+| 设置页 | pages/SettingsPage | 通知权限、默认时长、休息配置 |
 
 ### 2.2 页面跳转图
 ```
-Index (首页)
-  ├─> TaskEditPage (新建/编辑)
-  ├─> FocusPage (开始专注)
-  ├─> HistoryPage (查看历史)
-  └─> GuidePage (首次引导)
+Index (首页) [带底部导航: Home | History | Settings]
+  ├─> FAB (+) ──────────────────> StartPage (启动配置)
+  ├─> 任务「开始」按钮 ─────────> StartPage (传入 taskId)
+  ├─> 底部 Tab: History ────────> HistoryPage
+  ├─> 底部 Tab: Settings ───────> SettingsPage
+  └─> 恢复会话提示 ──────────────> TimerPage (恢复状态)
 
-FocusPage
-  └─> Index (结束后返回)
+StartPage (启动配置页)
+  ├─> 「创建任务」───────────────> TaskEditPage
+  ├─> 「开始专注」───────────────────> FocusPage (启动会话，运行时称TimerPage)
+  └─> 「无任务启动」─────────────────> FocusPage (匿名会话)
+
+TaskEditPage
+  └─> 保存/取消 ────────────────────> router.back() (返回上一页)
+
+FocusPage (运行计时页，运行时称TimerPage)
+  ├─> 「结束专注」───────────────> Index (返回首页)
+  ├─> 「暂停」后退出 ────────────> Index (保存暂停状态)
+  └─> 后台/前台切换 ─────────────> 自动暂停/恢复提示
+
+HistoryPage
+  └─> 底部 Tab 切换回 ───────────> Index
+
+SettingsPage
+  └─> 底部 Tab 切换回 ───────────> Index
+
+GuidePage
+  └─> 完成引导 ──────────────────> Index
 ```
 
 ---

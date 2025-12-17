@@ -50,6 +50,10 @@
       {
         "name": "ohos.permission.PUBLISH_AGENT_REMINDER"
       }
+      // 可选：如需分布式数据同步，取消下面的注释
+      // {
+      //   "name": "ohos.permission.DISTRIBUTED_DATASYNC"
+      // }
     ]
   }
 }

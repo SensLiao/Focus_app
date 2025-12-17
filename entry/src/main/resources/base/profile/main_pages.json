@@ -1,6 +1,7 @@
 {
   "src": [
     "pages/Index",
+    "pages/StartPage",
     "pages/FocusPage",
     "pages/TaskEditPage",
     "pages/GuidePage",

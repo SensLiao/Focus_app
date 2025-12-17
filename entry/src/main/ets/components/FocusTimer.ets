@@ -49,10 +49,20 @@ export struct FocusTimer {
 
       // 操作按钮（倒计时模式）
       if (this.isCountdown) {
-        Row() {
+        Row({ space: Theme.SPACE_MEDIUM }) {
           Button('延长 5 分钟')
-            .fontSize(Theme.FONT_SIZE_SMALL)
-            .backgroundColor(Theme.COLOR_PRIMARY_LIGHT)
+            .fontSize(Theme.FONT_SIZE_MEDIUM)
+            .height(48)
+            .layoutWeight(1)
+            .backgroundColor(Theme.COLOR_PRIMARY)
+            .borderRadius(Theme.BORDER_RADIUS_LARGE)
+            .fontWeight(FontWeight.Medium)
+            .shadow({
+              radius: Theme.SHADOW_MEDIUM.radius,
+              color: Theme.SHADOW_MEDIUM.color,
+              offsetX: Theme.SHADOW_MEDIUM.offsetX,
+              offsetY: Theme.SHADOW_MEDIUM.offsetY
+            })
             .onClick(() => {
               if (this.onExtend) {
                 this.onExtend()
@@ -60,17 +70,26 @@ export struct FocusTimer {
             })
 
           Button('强制结束')
-            .fontSize(Theme.FONT_SIZE_SMALL)
+            .fontSize(Theme.FONT_SIZE_MEDIUM)
+            .height(48)
+            .layoutWeight(1)
             .backgroundColor(Theme.COLOR_ERROR)
-            .margin({ left: Theme.SPACE_MEDIUM })
+            .borderRadius(Theme.BORDER_RADIUS_LARGE)
+            .fontWeight(FontWeight.Medium)
+            .shadow({
+              radius: Theme.SHADOW_MEDIUM.radius,
+              color: Theme.SHADOW_MEDIUM.color,
+              offsetX: Theme.SHADOW_MEDIUM.offsetX,
+              offsetY: Theme.SHADOW_MEDIUM.offsetY
+            })
             .onClick(() => {
               if (this.onForceFinish) {
                 this.onForceFinish()
               }
             })
         }
-        .margin({ top: Theme.SPACE_LARGE })
-        .justifyContent(FlexAlign.Center)
+        .width('85%')
+        .margin({ top: Theme.SPACE_XLARGE })
       }
     }
     .width('100%')

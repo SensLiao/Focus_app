@@ -85,5 +85,11 @@ export struct BottomNav {
       width: { top: 1 },
       color: Theme.COLOR_BORDER
     })
+    .shadow({
+      radius: Theme.SHADOW_SMALL.radius,
+      color: Theme.SHADOW_SMALL.color,
+      offsetX: 0,
+      offsetY: -2
+    })
   }
 }
