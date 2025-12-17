@@ -1,15 +1,19 @@
 # Backend Design – Focus App
 
-> 目标：让后端（Store/Service/Data）与前端契合，实现需求文档的 Must/Should/Could 功能，并对齐现有分层架构。强调可执行性：迁移脚本、字段落地、Store/Service 调用链、Result 约定、事务与测试要点。
+> **版本**：v2.0  
+> **更新日期**：2025-12-17  
+> **目标**：让后端（Store/Service/Data）与前端契合，实现需求文档的 Must/Should/Could 功能，并对齐现有分层架构。  
+> **强调**：可执行性（迁移脚本、字段落地、Store/Service 调用链、Result 约定、事务与测试要点）  
+> **相关文档**：[ARCHITECTURE.md](./ARCHITECTURE.md) | [FRONTEND_DESIGN.md](./FRONTEND_DESIGN.md)
 
 ## 1. 领域模型与 ER 映射（基于附件图）
 - Task (任务)
   - id, title, description, createdAt, completedAt, status(未完成/已完成), isAnonymous, totalFocusTime
 - FocusSession (专注会话)
   - id, taskId?, startAt, endAt, status(RUNNING/PAUSED/FINISHED), actualFocusDuration, totalDuration, breakCount, interruptionReason
-  - timeLimitMs?（倒计时上限，对应图中 time_limit）
-  - sessionType?（正计时/倒计时/番茄，图中 type）
-  - restIntervalMs?, restDurationMs?（图中 rest_interval/rest_duration）
+  - timeLimitMs?（倒计时上限）
+  - sessionType?（NORMAL/COUNTDOWN/POMODORO，对应正计时/倒计时/番茄钟）
+  - restIntervalMs?, restDurationMs?（休息间隔/休息时长）
 - FocusSegment (专注段)
   - id, sessionId, segmentIndex, startAt, endAt, durationMs (用于多段累积专注)
 - BreakEvent (休息事件)
@@ -21,7 +25,7 @@
 现有表已覆盖 Task/Session/Segment/Break。新增字段对齐需求：
 - focus_sessions
   - time_limit_ms INTEGER DEFAULT NULL
-  - session_type TEXT DEFAULT 'FOCUS' CHECK(session_type IN ('FOCUS','COUNTDOWN','POMODORO'))
+  - session_type TEXT DEFAULT 'NORMAL' CHECK(session_type IN ('NORMAL','COUNTDOWN','POMODORO'))
   - rest_interval_ms INTEGER DEFAULT NULL
   - rest_duration_ms INTEGER DEFAULT NULL
   - interruption_reason TEXT
@@ -37,7 +41,7 @@
 - onUpgrade(store, old, new):
   - if old < new:
     - ALTER TABLE focus_sessions ADD COLUMN time_limit_ms INTEGER;
-    - ALTER TABLE focus_sessions ADD COLUMN session_type TEXT DEFAULT 'FOCUS' CHECK(session_type IN ('FOCUS','COUNTDOWN','POMODORO'));
+    - ALTER TABLE focus_sessions ADD COLUMN session_type TEXT DEFAULT 'NORMAL' CHECK(session_type IN ('NORMAL','COUNTDOWN','POMODORO'));
     - ALTER TABLE focus_sessions ADD COLUMN rest_interval_ms INTEGER;
     - ALTER TABLE focus_sessions ADD COLUMN rest_duration_ms INTEGER;
     - ALTER TABLE focus_sessions ADD COLUMN interruption_reason TEXT;

@@ -24,6 +24,11 @@ export class BreakRepo {
         actual_duration: 0,
         is_skipped: 0
       }
+      
+      // 添加 reason 字段支持
+      if (dto.reason !== undefined) {
+        valueBucket.reason = dto.reason
+      }
 
       const rowId = await store.insert('break_events', valueBucket)
       Logger.info(`Break event created with id: ${rowId}`)
@@ -50,6 +55,9 @@ export class BreakRepo {
       }
       if (dto.isSkipped !== undefined) {
         valueBucket.is_skipped = dto.isSkipped ? 1 : 0
+      }
+      if (dto.reason !== undefined) {
+        valueBucket.reason = dto.reason
       }
 
       const predicates = new relationalStore.RdbPredicates('break_events')
@@ -107,7 +115,10 @@ export class BreakRepo {
         : resultSet.getLong(resultSet.getColumnIndex('end_at')),
       plannedDuration: resultSet.getLong(resultSet.getColumnIndex('planned_duration')),
       actualDuration: resultSet.getLong(resultSet.getColumnIndex('actual_duration')),
-      isSkipped: resultSet.getLong(resultSet.getColumnIndex('is_skipped')) === 1
+      isSkipped: resultSet.getLong(resultSet.getColumnIndex('is_skipped')) === 1,
+      reason: resultSet.isColumnNull(resultSet.getColumnIndex('reason'))
+        ? undefined
+        : resultSet.getString(resultSet.getColumnIndex('reason'))
     }
   }
 }

@@ -13,60 +13,100 @@ export struct BreakTimer {
 
   build() {
     Column() {
-      Text('休息时间')
-        .fontSize(Theme.FONT_SIZE_LARGE)
-        .fontColor(Theme.COLOR_TEXT_PRIMARY)
-        .fontWeight(FontWeight.Bold)
+      // 卡片容器
+      Column() {
+        Text('休息时间')
+          .fontSize(Theme.FONT_SIZE_LARGE)
+          .fontColor(Theme.COLOR_TEXT_PRIMARY)
+          .fontWeight(FontWeight.Bold)
+          .margin({ bottom: Theme.SPACE_MEDIUM })
 
-      // 进度条
-      Progress({
-        value: Math.min(this.elapsedMs, this.plannedDurationMs),
-        total: this.plannedDurationMs,
-        type: ProgressType.Ring
-      })
-        .width(200)
-        .height(200)
+        // 进度环容器
+        Stack() {
+          // 进度环
+          Progress({
+            value: Math.min(this.elapsedMs, this.plannedDurationMs),
+            total: this.plannedDurationMs,
+            type: ProgressType.Ring
+          })
+            .width(240)
+            .height(240)
+            .color(Theme.COLOR_SUCCESS)
+            .style({ strokeWidth: 12 })
+
+          // 中心时间显示
+          Column() {
+            Text(this.formatCountdown(this.plannedDurationMs - this.elapsedMs))
+              .fontSize(56)
+              .fontColor(Theme.COLOR_SUCCESS)
+              .fontWeight(FontWeight.Bold)
+              .fontFamily('monospace')
+
+            Text('剩余时间')
+              .fontSize(Theme.FONT_SIZE_SMALL)
+              .fontColor(Theme.COLOR_TEXT_SECONDARY)
+              .margin({ top: Theme.SPACE_TINY })
+          }
+        }
         .margin({ top: Theme.SPACE_LARGE, bottom: Theme.SPACE_LARGE })
-        .color(Theme.COLOR_SUCCESS)
 
-      // 倒计时显示
-      Text(this.formatCountdown(this.plannedDurationMs - this.elapsedMs))
-        .fontSize(48)
-        .fontColor(Theme.COLOR_SUCCESS)
-        .fontWeight(FontWeight.Bold)
-        .fontFamily('monospace')
+        // 操作按钮
+        Row({ space: Theme.SPACE_MEDIUM }) {
+          Button('跳过休息')
+            .fontSize(Theme.FONT_SIZE_MEDIUM)
+            .backgroundColor(Theme.COLOR_WARNING)
+            .borderRadius(Theme.BORDER_RADIUS_LARGE)
+            .height(48)
+            .layoutWeight(1)
+            .shadow({
+              radius: Theme.SHADOW_SMALL.radius,
+              color: Theme.SHADOW_SMALL.color,
+              offsetX: Theme.SHADOW_SMALL.offsetX,
+              offsetY: Theme.SHADOW_SMALL.offsetY
+            })
+            .onClick(() => {
+              if (this.onSkip) {
+                this.onSkip()
+              }
+            })
 
-      Text('剩余时间')
-        .fontSize(Theme.FONT_SIZE_SMALL)
-        .fontColor(Theme.COLOR_TEXT_SECONDARY)
-        .margin({ top: Theme.SPACE_SMALL })
-
-      // 操作按钮
-      Row() {
-        Button('跳过休息')
-          .fontSize(Theme.FONT_SIZE_SMALL)
-          .backgroundColor(Theme.COLOR_WARNING)
-          .onClick(() => {
-            if (this.onSkip) {
-              this.onSkip()
-            }
-          })
-
-        Button('延长 5 分钟')
-          .fontSize(Theme.FONT_SIZE_SMALL)
-          .backgroundColor(Theme.COLOR_PRIMARY_LIGHT)
-          .margin({ left: Theme.SPACE_MEDIUM })
-          .onClick(() => {
-            if (this.onExtend) {
-              this.onExtend()
-            }
-          })
+          Button('延长 5 分钟')
+            .fontSize(Theme.FONT_SIZE_MEDIUM)
+            .backgroundColor(Theme.COLOR_PRIMARY)
+            .borderRadius(Theme.BORDER_RADIUS_LARGE)
+            .height(48)
+            .layoutWeight(1)
+            .shadow({
+              radius: Theme.SHADOW_SMALL.radius,
+              color: Theme.SHADOW_SMALL.color,
+              offsetX: Theme.SHADOW_SMALL.offsetX,
+              offsetY: Theme.SHADOW_SMALL.offsetY
+            })
+            .onClick(() => {
+              if (this.onExtend) {
+                this.onExtend()
+              }
+            })
+        }
+        .width('100%')
+        .padding({ left: Theme.SPACE_MEDIUM, right: Theme.SPACE_MEDIUM })
       }
-      .margin({ top: Theme.SPACE_LARGE })
-      .justifyContent(FlexAlign.Center)
+      .width('90%')
+      .constraintSize({ maxWidth: 400 })
+      .padding(Theme.SPACE_XLARGE)
+      .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+      .borderRadius(Theme.BORDER_RADIUS_LARGE)
+      .shadow({
+        radius: Theme.SHADOW_LARGE.radius,
+        color: Theme.SHADOW_LARGE.color,
+        offsetX: Theme.SHADOW_LARGE.offsetX,
+        offsetY: Theme.SHADOW_LARGE.offsetY
+      })
     }
     .width('100%')
+    .height('100%')
     .justifyContent(FlexAlign.Center)
+    .backgroundColor(Theme.COLOR_BACKGROUND)
   }
 
   private formatCountdown(ms: number): string {

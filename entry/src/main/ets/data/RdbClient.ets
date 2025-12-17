@@ -23,7 +23,8 @@ export class RdbClient {
     try {
       const config: relationalStore.StoreConfig = {
         name: Constants.DB_NAME,
-        securityLevel: relationalStore.SecurityLevel.S1
+        securityLevel: relationalStore.SecurityLevel.S2  // S2级别：应用私有目录，适合大多数场景
+        // 如需加密，添加: encrypt: true, encryptKey: new Uint8Array([...])
       }
 
       RdbClient.store = await relationalStore.getRdbStore(context, config)
@@ -36,6 +37,10 @@ export class RdbClient {
       // 初始化表结构和迁移
       await RdbClient.initTables(RdbClient.store)
       await RdbClient.migrate(RdbClient.store)
+      
+      // 验证表结构
+      await RdbClient.verifyTables(RdbClient.store)
+      
       Logger.info('Tables initialized and migrated')
 
       return RdbClient.store
@@ -127,32 +132,32 @@ export class RdbClient {
    */
   private static async migrate(store: relationalStore.RdbStore): Promise<void> {
     try {
-      // 检查是否需要迁移（简单方式：检查列是否存在）
-      const checkSql = 'PRAGMA table_info(focus_sessions)'
-      const resultSet = await store.querySql(checkSql)
+      // 检查 focus_sessions 表的列
+      const checkSessionSql = 'PRAGMA table_info(focus_sessions)'
+      const sessionResultSet = await store.querySql(checkSessionSql)
       
       let hasTimeLimitMs = false
       let hasSessionType = false
       let hasRestIntervalMs = false
       let hasRestDurationMs = false
       
-      while (resultSet.goToNextRow()) {
-        const columnName = resultSet.getString(1) // column name 在 index 1
+      while (sessionResultSet.goToNextRow()) {
+        const columnName = sessionResultSet.getString(1) // column name 在 index 1
         if (columnName === 'time_limit_ms') hasTimeLimitMs = true
         if (columnName === 'session_type') hasSessionType = true
         if (columnName === 'rest_interval_ms') hasRestIntervalMs = true
         if (columnName === 'rest_duration_ms') hasRestDurationMs = true
       }
-      resultSet.close()
+      sessionResultSet.close()
 
-      // 添加缺失的列
+      // 添加 focus_sessions 缺失的列
       if (!hasTimeLimitMs) {
         await store.executeSql('ALTER TABLE focus_sessions ADD COLUMN time_limit_ms INTEGER')
         Logger.info('Added time_limit_ms column')
       }
       
       if (!hasSessionType) {
-        await store.executeSql("ALTER TABLE focus_sessions ADD COLUMN session_type TEXT DEFAULT 'NORMAL' CHECK(session_type IN ('NORMAL','COUNTDOWN','POMODORO'))")
+        await store.executeSql("ALTER TABLE focus_sessions ADD COLUMN session_type TEXT DEFAULT 'NORMAL'")
         Logger.info('Added session_type column')
       }
       
@@ -166,11 +171,98 @@ export class RdbClient {
         Logger.info('Added rest_duration_ms column')
       }
       
-      // interruption_reason 已在原表中定义
+      // 检查 break_events 表的列
+      const checkBreakSql = 'PRAGMA table_info(break_events)'
+      const breakResultSet = await store.querySql(checkBreakSql)
+      
+      let hasReason = false
+      while (breakResultSet.goToNextRow()) {
+        const columnName = breakResultSet.getString(1)
+        if (columnName === 'reason') hasReason = true
+      }
+      breakResultSet.close()
+
+      // 添加 break_events 缺失的列
+      if (!hasReason) {
+        await store.executeSql('ALTER TABLE break_events ADD COLUMN reason TEXT')
+        Logger.info('Added reason column to break_events')
+      }
+      
       Logger.info('Database migration completed')
     } catch (error) {
       Logger.error('Database migration failed', JSON.stringify(error))
       // 不抛出错误，允许继续运行（可能列已存在）
     }
+  }
+
+  /**
+   * 验证表结构
+   */
+  private static async verifyTables(store: relationalStore.RdbStore): Promise<void> {
+    const requiredTables = ['tasks', 'focus_sessions', 'focus_segments', 'break_events']
+    
+    for (const tableName of requiredTables) {
+      const verifySql = `SELECT name FROM sqlite_master WHERE type='table' AND name='${tableName}'`
+      const resultSet = await store.querySql(verifySql)
+      
+      if (resultSet.rowCount === 0) {
+        Logger.error(`Table ${tableName} does not exist`)
+        resultSet.close()
+        throw new Error(`Required table ${tableName} is missing`)
+      }
+      
+      resultSet.close()
+      Logger.info(`Table ${tableName} verified`)
+    }
+  }
+
+  /**
+   * 数据库完整性检查
+   */
+  static async checkIntegrity(context: Context): Promise<boolean> {
+    try {
+      const store = await RdbClient.getStore(context)
+      const resultSet = await store.querySql('PRAGMA integrity_check')
+      
+      let isValid = false
+      if (resultSet.goToFirstRow()) {
+        const result = resultSet.getString(0)
+        isValid = result === 'ok'
+        Logger.info(`Database integrity check: ${result}`)
+      }
+      
+      resultSet.close()
+      return isValid
+    } catch (error) {
+      Logger.error('Integrity check failed', JSON.stringify(error))
+      return false
+    }
+  }
+
+  /**
+   * 开始事务
+   */
+  static async beginTransaction(context: Context): Promise<void> {
+    const store = await RdbClient.getStore(context)
+    await store.executeSql('BEGIN TRANSACTION')
+    Logger.info('Transaction started')
+  }
+
+  /**
+   * 提交事务
+   */
+  static async commitTransaction(context: Context): Promise<void> {
+    const store = await RdbClient.getStore(context)
+    await store.executeSql('COMMIT')
+    Logger.info('Transaction committed')
+  }
+
+  /**
+   * 回滚事务
+   */
+  static async rollbackTransaction(context: Context): Promise<void> {
+    const store = await RdbClient.getStore(context)
+    await store.executeSql('ROLLBACK')
+    Logger.info('Transaction rolled back')
   }
 }

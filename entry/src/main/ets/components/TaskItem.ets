@@ -56,10 +56,17 @@ export struct TaskItem {
       // 开始按钮
       Button('Start')
         .fontSize(Theme.FONT_SIZE_SMALL)
-        .height(36)
-        .padding({ left: Theme.SPACE_MEDIUM, right: Theme.SPACE_MEDIUM })
+        .height(40)
+        .padding({ left: Theme.SPACE_LARGE, right: Theme.SPACE_LARGE })
         .backgroundColor(Theme.COLOR_PRIMARY)
-        .borderRadius(Theme.BORDER_RADIUS_SMALL)
+        .borderRadius(Theme.BORDER_RADIUS_LARGE)
+        .fontWeight(FontWeight.Medium)
+        .shadow({
+          radius: Theme.SHADOW_SMALL.radius,
+          color: Theme.SHADOW_SMALL.color,
+          offsetX: Theme.SHADOW_SMALL.offsetX,
+          offsetY: Theme.SHADOW_SMALL.offsetY
+        })
         .onClick(() => {
           if (this.onStart) {
             this.onStart(this.task)

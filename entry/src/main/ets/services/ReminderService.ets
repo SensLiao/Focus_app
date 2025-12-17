@@ -89,4 +89,31 @@ export class ReminderService {
       delaySeconds
     )
   }
+
+  /**
+   * 检查提醒权限
+   * 注意：实际权限检查需要在 module.json5 中声明权限
+   * 这里通过尝试创建一个提醒来判断权限
+   */
+  static async checkPermission(): Promise<boolean> {
+    try {
+      // 尝试创建一个立即触发的测试提醒
+      const reminderRequest: reminderAgentManager.ReminderRequestTimer = {
+        reminderType: reminderAgentManager.ReminderType.REMINDER_TYPE_TIMER,
+        triggerTimeInSeconds: 1,
+        title: 'test',
+        content: 'test'
+      }
+
+      const reminderId = await reminderAgentManager.publishReminder(reminderRequest)
+      // 立即取消测试提醒
+      await reminderAgentManager.cancelReminder(reminderId)
+      
+      Logger.info('Reminder permission granted')
+      return true
+    } catch (error) {
+      Logger.warn('Reminder permission may not be granted', JSON.stringify(error))
+      return false
+    }
+  }
 }
