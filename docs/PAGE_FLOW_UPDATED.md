@@ -328,8 +328,8 @@ struct Index {
 - [ ] StartPage点击「开始」时会话创建失败 → toast + 留在StartPage
 - [ ] TimerPage加载时无会话 → toast + 返回Index
 - [ ] 后台切换时暂停 → 回前台提示继续/结束
-- [ ] 杀进程后重启 → Index显示恢复对话框
-
+- [ ] 杀进程后重启 → Index显示恢复对话框- [ ] **活动任务识别**：task.activeSessionId !== null 显示咖啡图标，否则显示播放按钮
+- [ ] **多任务防护**：同时只能有一个活动会话，启动新会话前检查并提示切换
 ---
 
 ## 6. 文件清单

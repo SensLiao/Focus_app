@@ -8,7 +8,7 @@
 
 ## 1. 领域模型与 ER 映射（基于附件图）
 - Task (任务)
-  - id, title, description, createdAt, completedAt, status(未完成/已完成), isAnonymous, totalFocusTime
+  - id, title, description, createdAt, **lastCompletedAt**（最后完成时间，支持多次完成）, isAnonymous, totalFocusTime, **activeSessionId**（当前活动会话ID，用于UI指示和恢复）, **sessionCount**（完成的会话总数）
 - FocusSession (专注会话)
   - id, taskId?, startAt, endAt, status(RUNNING/PAUSED/FINISHED), actualFocusDuration, totalDuration, breakCount, interruptionReason
   - timeLimitMs?（倒计时上限）
@@ -20,6 +20,11 @@
   - id, sessionId, startAt, endAt, plannedDuration, actualDuration, isSkipped (图中 rest_record, rest_count)
 - InterruptionReason (可复用 BreakEvent.interruptionReason 或 Session.interruptionReason；需求7.x)
 - User (暂不落库，若后续需要分析用户/多账号，再新增 user 表 + analysis_result 字段)
+
+**关键设计理念**（借鉴React应用）：
+- **任务可多次完成**：完成会话后任务保留在列表，`totalFocusTime`累积，`sessionCount`递增
+- **活动会话追踪**：`activeSessionId`非空时UI显示特殊图标（咖啡杯），点击直接恢复
+- **单活动会话原则**：同时只能有一个RUNNING会话，启动新会话前需检查并提示切换
 
 ## 2. 数据库设计与迁移建议（可直接落代码）
 现有表已覆盖 Task/Session/Segment/Break。新增字段对齐需求：
@@ -56,8 +61,11 @@
   - update(id, dto): Result<void>
   - delete(id): Result<void> // 级联删除
   - findById(id): Result<Task>
-  - findActive(): Result<Task[]>
-  - findCompleted(limit?, offset?): Result<Task[]>
+  - findActive(): Result<Task[]>  // 查询未删除的任务（不再按completedAt区分）
+  - findWithActiveSession(): Result<Task[]>  // 查询有活动会话的任务
+  - findCompleted(limit?, offset?): Result<Task[]>  // 按lastCompletedAt排序
+  - **updateActiveSession(taskId, sessionId?): Result<void>**  // 设置/清除活动会话ID
+  - **incrementSessionCount(taskId): Result<void>**  // 会话完成时递增计数
 - SessionRepo
   - create(taskId?, opts { timeLimitMs?, sessionType?, restIntervalMs?, restDurationMs?, interruptionReason? }): Result<number>
   - updateStatus(id, status, patch): Result<void> // patch 可含 time_limit_ms/session_type/rest_interval_ms/rest_duration_ms/interruption_reason
@@ -77,13 +85,17 @@
 ## 4. Store 层动作设计（前端契约 + 伪代码要点）
 - FocusStore
   - startFocus(taskId?, options { timeLimitMs?, sessionType?, restIntervalMs?, restDurationMs?, interruptionReason? })
+    - **检查是否有其他活动会话**：查询所有task.activeSessionId !== null，若存在弹窗提示切换
     - 创建 session + 第1段；启动计时器；若倒计时设置截止时间；回写状态。
+    - **更新task.activeSessionId = sessionId**
   - pauseFocus(reason?)
     - 停止计时器；结束当前段；updateStatus(PAUSED, interruption_reason=reason)；可创建 return reminder。
   - resumeFocus()
     - 新建下一段；updateStatus(RUNNING)；恢复计时器；取消 return reminder。
   - finishFocus(reason?)
-    - 结束当前段；聚合 actualFocusDuration/totalDuration；updateStatus(FINISHED, interruption_reason=reason)；更新 Task.totalFocusTime/完成时间；取消所有提醒。
+    - 结束当前段；聚合 actualFocusDuration/totalDuration；updateStatus(FINISHED, interruption_reason=reason)。
+    - **更新 Task**：totalFocusTime += actualFocusDuration；lastCompletedAt = now()；sessionCount++；activeSessionId = null。
+    - 取消所有提醒；**任务保留在列表中，可再次启动新会话**。
   - startBreak(durationMs, reason?)
     - 暂停专注计时；create break_event(reason)；启动休息计时/提醒；isBreaking=true。
   - finishBreak(reason?)
@@ -96,6 +108,7 @@
     - 取消 return reminder；提示用户继续/结束。
   - checkAndRecoverSession()
     - 启动时查 RUNNING；标记为 PAUSED + interruption_reason='APP_KILLED'；提示恢复。
+    - **若有task.activeSessionId，在Index首页显示恢复入口**（咖啡图标脉动效果）。
   - setInterruptionReason(reason)
     - 写入当前 session.interruption_reason 或 break.reason。
 

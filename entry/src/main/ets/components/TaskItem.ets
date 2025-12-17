@@ -10,7 +10,13 @@ export struct TaskItem {
   @Prop task: Task
   onTap?: (task: Task) => void
   onStart?: (task: Task) => void
+  onResume?: (task: Task) => void  // 新增：恢复活动会话
   onDelete?: (task: Task) => void
+
+  // 判断是否为活动任务
+  private isActiveTask(): boolean {
+    return this.task.activeSessionId !== undefined && this.task.activeSessionId !== null
+  }
 
   build() {
     Row() {
@@ -32,46 +38,91 @@ export struct TaskItem {
             .margin({ top: Theme.SPACE_TINY })
         }
 
-        // 专注时长标签
-        if (this.task.totalFocusTime > 0) {
-          Row() {
+        // 专注时长和会话计数标签
+        Row({ space: Theme.SPACE_SMALL }) {
+          if (this.task.totalFocusTime > 0) {
             Text(this.formatDuration(this.task.totalFocusTime))
               .fontSize(Theme.FONT_SIZE_TINY)
               .fontColor(Theme.COLOR_PRIMARY)
+              .padding({ 
+                left: Theme.SPACE_SMALL, 
+                right: Theme.SPACE_SMALL,
+                top: Theme.SPACE_TINY,
+                bottom: Theme.SPACE_TINY
+              })
+              .backgroundColor('#EFF6FF')
+              .borderRadius(Theme.BORDER_RADIUS_SMALL)
           }
-          .padding({ 
-            left: Theme.SPACE_SMALL, 
-            right: Theme.SPACE_SMALL,
-            top: Theme.SPACE_TINY,
-            bottom: Theme.SPACE_TINY
-          })
-          .backgroundColor('#EFF6FF')
-          .borderRadius(Theme.BORDER_RADIUS_SMALL)
-          .margin({ top: Theme.SPACE_SMALL })
+          
+          if (this.task.sessionCount > 0) {
+            Text(`${this.task.sessionCount} sessions`)
+              .fontSize(Theme.FONT_SIZE_TINY)
+              .fontColor(Theme.COLOR_TEXT_SECONDARY)
+              .padding({ 
+                left: Theme.SPACE_SMALL, 
+                right: Theme.SPACE_SMALL,
+                top: Theme.SPACE_TINY,
+                bottom: Theme.SPACE_TINY
+              })
+              .backgroundColor('#F5F5F5')
+              .borderRadius(Theme.BORDER_RADIUS_SMALL)
+          }
         }
+        .margin({ top: Theme.SPACE_SMALL })
       }
       .alignItems(HorizontalAlign.Start)
       .layoutWeight(1)
 
-      // 开始按钮
-      Button('Start')
-        .fontSize(Theme.FONT_SIZE_SMALL)
-        .height(40)
-        .padding({ left: Theme.SPACE_LARGE, right: Theme.SPACE_LARGE })
-        .backgroundColor(Theme.COLOR_PRIMARY)
-        .borderRadius(Theme.BORDER_RADIUS_LARGE)
-        .fontWeight(FontWeight.Medium)
+      // 根据是否活动任务显示不同按钮
+      if (this.isActiveTask()) {
+        // 活动任务：显示紫色咖啡图标
+        Button({ type: ButtonType.Circle }) {
+          Text('☕')
+            .fontSize(24)
+        }
+        .width(50)
+        .height(50)
+        .backgroundColor('#B37FEB')  // 渐变紫
+        .borderRadius(25)
         .shadow({
-          radius: Theme.SHADOW_SMALL.radius,
-          color: Theme.SHADOW_SMALL.color,
-          offsetX: Theme.SHADOW_SMALL.offsetX,
-          offsetY: Theme.SHADOW_SMALL.offsetY
+          radius: 12,
+          color: '#B37FEB33',
+          offsetX: 0,
+          offsetY: 4
         })
         .onClick(() => {
-          if (this.onStart) {
-            this.onStart(this.task)
+          if (this.onResume) {
+            this.onResume(this.task)
           }
         })
+        // 添加脉动动画提示
+        .animation({
+          duration: 1500,
+          curve: Curve.EaseInOut,
+          iterations: -1,  // 无限循环
+          playMode: PlayMode.Alternate
+        })
+      } else {
+        // 普通任务：显示绿色开始按钮
+        Button('Start')
+          .fontSize(Theme.FONT_SIZE_SMALL)
+          .height(40)
+          .padding({ left: Theme.SPACE_LARGE, right: Theme.SPACE_LARGE })
+          .backgroundColor(Theme.COLOR_PRIMARY)
+          .borderRadius(Theme.BORDER_RADIUS_LARGE)
+          .fontWeight(FontWeight.Medium)
+          .shadow({
+            radius: Theme.SHADOW_SMALL.radius,
+            color: Theme.SHADOW_SMALL.color,
+            offsetX: Theme.SHADOW_SMALL.offsetX,
+            offsetY: Theme.SHADOW_SMALL.offsetY
+          })
+          .onClick(() => {
+            if (this.onStart) {
+              this.onStart(this.task)
+            }
+          })
+      }
     }
     .width('100%')
     .padding(Theme.SPACE_MEDIUM)

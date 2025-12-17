@@ -124,6 +124,9 @@ struct Index {
                   onStart: (t: Task) => {
                     this.startFocusWithTask(t)
                   },
+                  onResume: (t: Task) => {
+                    this.resumeActiveTask(t)
+                  },
                   onDelete: (t: Task) => {
                     this.deleteTask(t)
                   }
@@ -312,6 +315,17 @@ struct Index {
     router.pushUrl({ 
       url: 'pages/StartPage',
       params: { taskId: task.id, taskTitle: task.title }
+    })
+  }
+
+  // 恢复活动任务（直接跳转TimerPage）
+  private async resumeActiveTask(task: Task) {
+    Logger.info(`Resuming active task: ${task.id}`)
+    
+    // 直接跳转到TimerPage恢复会话
+    router.pushUrl({ 
+      url: 'pages/FocusPage',
+      params: { resumeTaskId: task.id }
     })
   }
 

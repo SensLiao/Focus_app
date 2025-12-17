@@ -13,8 +13,10 @@ export interface HealthCheckResult {
     tablesExist: boolean
     integrityOk: boolean
     foreignKeysEnabled: boolean
+    newFieldsExist: boolean  // 新增：检查新字段
   }
   errors: string[]
+  warnings: string[]  // 新增：警告信息
 }
 
 export class DatabaseHealthCheck {
@@ -28,9 +30,11 @@ export class DatabaseHealthCheck {
         connectionValid: false,
         tablesExist: false,
         integrityOk: false,
-        foreignKeysEnabled: false
+        foreignKeysEnabled: false,
+        newFieldsExist: false
       },
-      errors: []
+      errors: [],
+      warnings: []
     }
 
     try {
@@ -45,6 +49,9 @@ export class DatabaseHealthCheck {
       
       // 4. 检查外键约束
       result.checks.foreignKeysEnabled = await this.checkForeignKeys(context, result.errors)
+      
+      // 5. 检查新字段（活动会话追踪）
+      result.checks.newFieldsExist = await this.checkNewFields(context, result.errors, result.warnings)
       
       // 综合判断
       result.isHealthy = Object.values(result.checks).every(check => check === true)
@@ -142,6 +149,46 @@ export class DatabaseHealthCheck {
   }
 
   /**
+   * 检查新字段是否存在（活动会话追踪字段）
+   */
+  private static async checkNewFields(context: Context, errors: string[], warnings: string[]): Promise<boolean> {
+    try {
+      const store = await RdbClient.getStore(context)
+      const checkSql = 'PRAGMA table_info(tasks)'
+      const resultSet = await store.querySql(checkSql)
+      
+      let hasLastCompletedAt = false
+      let hasActiveSessionId = false
+      let hasSessionCount = false
+      
+      while (resultSet.goToNextRow()) {
+        const columnName = resultSet.getString(1)
+        if (columnName === 'last_completed_at') hasLastCompletedAt = true
+        if (columnName === 'active_session_id') hasActiveSessionId = true
+        if (columnName === 'session_count') hasSessionCount = true
+      }
+      resultSet.close()
+      
+      const missingFields: string[] = []
+      if (!hasLastCompletedAt) missingFields.push('last_completed_at')
+      if (!hasActiveSessionId) missingFields.push('active_session_id')
+      if (!hasSessionCount) missingFields.push('session_count')
+      
+      if (missingFields.length > 0) {
+        errors.push(`Missing fields in tasks table: ${missingFields.join(', ')}`)
+        warnings.push('Database migration may be required. These fields are needed for multi-session support.')
+        return false
+      }
+      
+      Logger.info('New fields check passed: all activity tracking fields exist')
+      return true
+    } catch (error) {
+      errors.push(`Failed to check new fields: ${JSON.stringify(error)}`)
+      return false
+    }
+  }
+
+  /**
    * 获取数据库统计信息
    */
   static async getDatabaseStats(context: Context): Promise<{
@@ -149,6 +196,7 @@ export class DatabaseHealthCheck {
     sessionCount: number
     segmentCount: number
     breakCount: number
+    activeTaskCount: number  // 新增：活动任务数
   }> {
     try {
       const store = await RdbClient.getStore(context)
@@ -157,7 +205,8 @@ export class DatabaseHealthCheck {
         taskCount: 0,
         sessionCount: 0,
         segmentCount: 0,
-        breakCount: 0
+        breakCount: 0,
+        activeTaskCount: 0
       }
       
       // 统计各表记录数
@@ -172,6 +221,13 @@ export class DatabaseHealthCheck {
         resultSet.close()
       }
       
+      // 统计活动任务数
+      const activeResultSet = await store.querySql('SELECT COUNT(*) FROM tasks WHERE active_session_id IS NOT NULL')
+      if (activeResultSet.goToFirstRow()) {
+        stats.activeTaskCount = activeResultSet.getLong(0)
+      }
+      activeResultSet.close()
+      
       Logger.info('Database stats', JSON.stringify(stats))
       return stats
       
@@ -181,7 +237,8 @@ export class DatabaseHealthCheck {
         taskCount: -1,
         sessionCount: -1,
         segmentCount: -1,
-        breakCount: -1
+        breakCount: -1,
+        activeTaskCount: -1
       }
     }
   }

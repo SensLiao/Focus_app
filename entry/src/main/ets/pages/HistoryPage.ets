@@ -209,9 +209,8 @@ struct HistoryPage {
                     .fontColor(Theme.COLOR_TEXT_PRIMARY)
                     .maxLines(1)
                     .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-                  if (task.completedAt) {
-                    Text('完成于 ' + this.formatDate(task.completedAt))
+                  if (task.lastCompletedAt) {
+                    Text('完成于 ' + this.formatDate(task.lastCompletedAt))
                       .fontSize(Theme.FONT_SIZE_TINY)
                       .fontColor(Theme.COLOR_TEXT_TERTIARY)
                   }

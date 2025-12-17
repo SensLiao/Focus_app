@@ -68,6 +68,15 @@ export class FocusStore {
       return fail('ALREADY_RUNNING', '已有进行中的会话')
     }
 
+    // 检查是否有其他活动会话
+    const activeTasksResult = await TaskRepo.findWithActiveSession(FocusStore.context)
+    if (activeTasksResult.ok && activeTasksResult.data.length > 0) {
+      const activeTasks = activeTasksResult.data
+      // 如果有其他活动会话，需要用户确认切换
+      Logger.warn(`Found ${activeTasks.length} active sessions`)
+      return fail('HAS_ACTIVE_SESSION', `已有${activeTasks.length}个活动会话，请先暂停或完成`)
+    }
+
     const now = Date.now()
 
     // 创建会话
@@ -84,6 +93,11 @@ export class FocusStore {
       return fail(sessionResult.code, sessionResult.message)
     }
     const sessionId = sessionResult.data
+
+    // 如果关联任务，更新任务的activeSessionId
+    if (taskId !== undefined) {
+      await TaskRepo.updateActiveSession(FocusStore.context, taskId, sessionId)
+    }
 
     // 创建第一个专注段
     const segmentResult = await SegmentRepo.create(FocusStore.context, {
@@ -269,15 +283,20 @@ export class FocusStore {
       totalDuration: totalDuration,
       interruptionReason: Constants.INTERRUPTION_USER_FINISHED
     })
-    // 如果关联了任务，更新任务的总专注时间并完成
+    // 如果关联了任务，更新任务统计并清除活动会话
     if (session.taskId !== undefined) {
       const taskResult = await TaskRepo.findById(FocusStore.context, session.taskId)
       if (taskResult.ok) {
         const task = taskResult.data
+        // 更新任务：累加totalFocusTime，更新lastCompletedAt，递增sessionCount，清除activeSessionId
         await TaskRepo.update(FocusStore.context, session.taskId, {
-          completedAt: now,
+          lastCompletedAt: now,
           totalFocusTime: task.totalFocusTime + actualDuration
         })
+        await TaskRepo.incrementSessionCount(FocusStore.context, session.taskId)
+        await TaskRepo.updateActiveSession(FocusStore.context, session.taskId, undefined)
+        
+        Logger.info(`Task ${session.taskId} updated: totalFocusTime=${task.totalFocusTime + actualDuration}, sessionCount incremented`)
       }
     }
 
