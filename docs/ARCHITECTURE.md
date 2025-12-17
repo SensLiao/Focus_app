@@ -19,6 +19,15 @@
 - ✅ 休息会话：可设置休息间隔与时长、休息开始/结束提示
 - ✅ 数据持久化：RDB 存储任务、会话、段、休息记录
 - ✅ 历史记录：查看已完成任务和专注统计
+- ✅ **任务多次完成**：任务完成后保留在列表，可再次启动新会话
+- ✅ **活动会话恢复**：UI显示活动任务特殊图标，点击直接恢复
+
+### 1.2 核心设计理念（借鉴React应用优秀实践）
+1. **任务可重复使用**：完成会话后任务不删除，`totalFocusTime`累积，支持多次专注会话
+2. **活动会话可视化**：`activeSessionId`非空的任务显示紫色咖啡图标，提供快速恢复入口
+3. **单活动会话原则**：同时只能有一个RUNNING会话，防止状态混乱
+4. **状态持久化优先**：会话状态实时保存到数据库，支持杀进程后恢复
+5. **职责清晰分离**：StartPage负责配置，TimerPage负责运行，Index负责列表和恢复
 
 ### 1.2 Should Have（有余力）
 - 记录 actual_focus_duration vs total_duration
@@ -91,9 +100,11 @@ export interface Task {
   title: string
   description?: string
   createdAt: number
-  completedAt?: number
+  lastCompletedAt?: number  // 最后完成时间（任务可多次完成）
   isAnonymous: boolean  // true 表示无任务直接计时
   totalFocusTime: number // 累计专注时长（ms）
+  activeSessionId?: number  // 当前活动会话ID（用于恢复和UI指示）
+  sessionCount: number  // 完成的会话总数
 }
 ```
 
@@ -156,9 +167,12 @@ CREATE TABLE tasks (
   title TEXT NOT NULL,
   description TEXT,
   created_at INTEGER NOT NULL,
-  completed_at INTEGER,
+  last_completed_at INTEGER,  -- 最后完成时间（支持多次完成）
   is_anonymous INTEGER NOT NULL DEFAULT 0,
-  total_focus_time INTEGER NOT NULL DEFAULT 0
+  total_focus_time INTEGER NOT NULL DEFAULT 0,
+  active_session_id INTEGER,  -- 当前活动会话ID（NULL表示无活动会话）
+  session_count INTEGER NOT NULL DEFAULT 0,  -- 完成的会话总数
+  FOREIGN KEY (active_session_id) REFERENCES focus_sessions(id) ON DELETE SET NULL
 );
 
 -- 会话表
@@ -199,9 +213,11 @@ CREATE TABLE break_events (
 );
 
 -- 索引
-CREATE INDEX idx_tasks_completed ON tasks(completed_at);
+CREATE INDEX idx_tasks_last_completed ON tasks(last_completed_at);
+CREATE INDEX idx_tasks_active_session ON tasks(active_session_id);
 CREATE INDEX idx_sessions_task_id ON focus_sessions(task_id);
 CREATE INDEX idx_sessions_start ON focus_sessions(start_at);
+CREATE INDEX idx_sessions_status ON focus_sessions(status);  -- 快速查询RUNNING会话
 CREATE INDEX idx_segments_session_id ON focus_segments(session_id);
 CREATE INDEX idx_breaks_session_id ON break_events(session_id);
 ```

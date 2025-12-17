@@ -119,7 +119,7 @@ export class TaskStore {
    */
   static async completeTask(id: number, totalFocusTime: number): Promise<Result<void>> {
     return TaskStore.updateTask(id, {
-      completedAt: Date.now(),
+      lastCompletedAt: Date.now(),
       totalFocusTime: totalFocusTime
     })
   }

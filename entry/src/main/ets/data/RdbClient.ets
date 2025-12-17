@@ -9,7 +9,7 @@ import { Logger } from '../common/logger'
 
 export class RdbClient {
   private static store: relationalStore.RdbStore | null = null
-  private static readonly DB_VERSION = 2 // 升级版本以支持新字段
+  private static readonly DB_VERSION = 3 // 升级版本以支持活动会话追踪
 
   /**
    * 获取 RDB Store 实例（单例）
@@ -61,9 +61,12 @@ export class RdbClient {
         title TEXT NOT NULL,
         description TEXT,
         created_at INTEGER NOT NULL,
-        completed_at INTEGER,
+        last_completed_at INTEGER,
         is_anonymous INTEGER NOT NULL DEFAULT 0,
-        total_focus_time INTEGER NOT NULL DEFAULT 0
+        total_focus_time INTEGER NOT NULL DEFAULT 0,
+        active_session_id INTEGER,
+        session_count INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (active_session_id) REFERENCES focus_sessions(id) ON DELETE SET NULL
       )`,
 
       // 会话表
@@ -104,9 +107,11 @@ export class RdbClient {
       )`,
 
       // 索引
-      'CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(completed_at)',
+      'CREATE INDEX IF NOT EXISTS idx_tasks_last_completed ON tasks(last_completed_at)',
+      'CREATE INDEX IF NOT EXISTS idx_tasks_active_session ON tasks(active_session_id)',
       'CREATE INDEX IF NOT EXISTS idx_sessions_task_id ON focus_sessions(task_id)',
       'CREATE INDEX IF NOT EXISTS idx_sessions_start ON focus_sessions(start_at)',
+      'CREATE INDEX IF NOT EXISTS idx_sessions_status ON focus_sessions(status)',
       'CREATE INDEX IF NOT EXISTS idx_segments_session_id ON focus_segments(session_id)',
       'CREATE INDEX IF NOT EXISTS idx_breaks_session_id ON break_events(session_id)'
     ]
@@ -132,6 +137,40 @@ export class RdbClient {
    */
   private static async migrate(store: relationalStore.RdbStore): Promise<void> {
     try {
+      // 检查 tasks 表的列
+      const checkTaskSql = 'PRAGMA table_info(tasks)'
+      const taskResultSet = await store.querySql(checkTaskSql)
+      
+      let hasLastCompletedAt = false
+      let hasActiveSessionId = false
+      let hasSessionCount = false
+      
+      while (taskResultSet.goToNextRow()) {
+        const columnName = taskResultSet.getString(1)
+        if (columnName === 'last_completed_at') hasLastCompletedAt = true
+        if (columnName === 'active_session_id') hasActiveSessionId = true
+        if (columnName === 'session_count') hasSessionCount = true
+      }
+      taskResultSet.close()
+
+      // 添加 tasks 缺失的列
+      if (!hasLastCompletedAt) {
+        // 迁移旧的 completed_at 数据到 last_completed_at
+        await store.executeSql('ALTER TABLE tasks ADD COLUMN last_completed_at INTEGER')
+        await store.executeSql('UPDATE tasks SET last_completed_at = completed_at WHERE completed_at IS NOT NULL')
+        Logger.info('Added last_completed_at column and migrated data')
+      }
+      
+      if (!hasActiveSessionId) {
+        await store.executeSql('ALTER TABLE tasks ADD COLUMN active_session_id INTEGER')
+        Logger.info('Added active_session_id column')
+      }
+      
+      if (!hasSessionCount) {
+        await store.executeSql('ALTER TABLE tasks ADD COLUMN session_count INTEGER NOT NULL DEFAULT 0')
+        Logger.info('Added session_count column')
+      }
+      
       // 检查 focus_sessions 表的列
       const checkSessionSql = 'PRAGMA table_info(focus_sessions)'
       const sessionResultSet = await store.querySql(checkSessionSql)

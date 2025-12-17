@@ -25,7 +25,7 @@
 
 | 页面 | 路径 | 核心职责 | 状态来源 | 关键交互 |
 |------|------|----------|----------|----------|
-| **首页** | pages/Index | 任务列表、快速专注入口、底部导航（Home/History/Settings）；首屏执行"未完成会话恢复"提示 | TaskStore, FocusStore | 点击任务播放按钮 → StartPage；点击 FAB → StartPage；会话恢复提示 → TimerPage |
+| **首页** | pages/Index | 任务列表、快速专注入口、底部导航（Home/History/Settings）；首屏执行"未完成会话恢复"提示；**活动任务显示特殊图标**（紫色咖啡杯）替代播放按钮 | TaskStore, FocusStore | 点击任务播放按钮 → StartPage；**点击活动任务咖啡图标 → 直接恢复到TimerPage**；点击 FAB → StartPage；会话恢复提示 → TimerPage |
 | **启动配置页** | pages/StartPage | 专注前配置（选择/创建任务、设置倒计时模式、休息间隔等）；包含"创建任务"和"无任务启动"两个入口 | TaskStore, FocusStore, SettingsService | 配置完成 → TimerPage；创建任务 → TaskEditPage；无任务启动 → TimerPage（匿名会话） |
 | **计时页** | pages/TimerPage (FocusPage) | 实际运行中的全屏计时页面，显示大圆形进度环、计时器、状态切换（专注/休息）、操作按钮（暂停/继续/休息/结束）；前后台提示、倒计时到点自动结束、延长/强制结束；干扰原因输入弹窗 | FocusStore（实时订阅） | 暂停 → 弹出干扰原因输入；休息 → 切换到休息模式；完成 → 返回首页 |
 | **休息视图** | 同 TimerPage 内部状态 | TimerPage 内部状态切换到休息模式，圆环和UI显示休息进度（支持跳过/延长） | FocusStore（isBreaking=true） | 结束休息 → 恢复专注；延长 → 增加休息时长 |
@@ -104,7 +104,7 @@ UI 只读 Store 状态；所有变更经 action 触发（UI 不直接触 DB/Serv
   - 成功后跳转 FocusPage；展示任务标题/匿名标识，显示计时或倒计时模式；底部按钮根据 sessionType 切换文案（如“结束倒计时”）。
 - 暂停专注：FocusPage → FocusStore.pauseFocus(reason?); UI 切“已暂停”状态，按钮变“继续/结束”，可输入干扰原因。
 - 继续专注：FocusPage → FocusStore.resumeFocus(); 新建专注段，计时重启，清理暂停提醒。
-- 结束专注：FocusPage → FocusStore.finishFocus(reason?); 汇总时长后返回首页，toast 提示。
+- 结束专注：FocusPage → FocusStore.finishFocus(reason?); 汇总时长后返回首页，toast 提示；**任务保留在列表中**（更新totalFocusTime和sessionCount），可再次启动新会话。
 - 倒计时结束（2.9）：Timer tick 检测 <=0 → 自动 finishFocus(reason='timeout')；UI 弹“时间到”。
 - 强制结束倒计时（2.10）：按钮“结束倒计时”→ finishFocus(reason='force_stop_limit')。
 - 新一轮倒计时（2.11）：结束后保留任务上下文 → startFocus(taskId, { timeLimitMs })。
