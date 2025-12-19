@@ -1,15 +1,12 @@
-
 /**
- * 首页 - 任务列表（基于Figma Design + UI 现代化）
+ * Home page - adapted to sample_frontend layout & flow
  */
-
 import router from '@ohos.router'
 import promptAction from '@ohos.promptAction'
 import { TaskStore, TaskState } from '../store/taskStore'
 import { FocusStore } from '../store/focusStore'
 import { Task } from '../model/Task'
-import { FocusSession, SessionType } from '../model/FocusSession'
-import { TaskItem } from '../components/TaskItem'
+import { FocusSession } from '../model/FocusSession'
 import { BottomNav } from '../components/BottomNav'
 import { Theme } from '../common/theme'
 import { Logger } from '../common/logger'
@@ -22,31 +19,30 @@ struct Index {
   @State showRecoverDialog: boolean = false
   @State recoveredSession: FocusSession | null = null
   @State recoveredTaskTitle: string = ''
+  @State isEditMode: boolean = false
+  @State deleteTarget: Task | null = null
+
   async aboutToAppear() {
-    // 初始化服务
     TaskStore.init(getContext(this))
     FocusStore.init(getContext(this))
     await SettingsService.init(getContext(this))
 
-    // 加载任务列表
     await TaskStore.loadTasks()
     this.taskState = TaskStore.getState()
 
-    // 检查未完成的会话
     const recoverResult = await FocusStore.checkAndRecoverSession()
     if (recoverResult.ok && recoverResult.data !== null && recoverResult.data !== undefined) {
       this.recoveredSession = recoverResult.data
-      // 查找任务标题
       if (this.recoveredSession && this.recoveredSession.taskId) {
         const task = TaskStore.findTask(this.recoveredSession.taskId)
-        this.recoveredTaskTitle = task?.title ?? '匿名专注'
+        this.recoveredTaskTitle = task?.title ?? 'Anonymous focus'
       } else {
-        this.recoveredTaskTitle = '匿名专注'
+        this.recoveredTaskTitle = 'Anonymous focus'
       }
       this.showRecoverDialog = true
     }
   }
-  // 页面每次显示时刷新任务列�?
+
   async onPageShow() {
     await TaskStore.loadTasks()
     this.taskState = TaskStore.getState()
@@ -55,57 +51,43 @@ struct Index {
   build() {
     Stack({ alignContent: Alignment.BottomEnd }) {
       Column() {
-        // 顶部标题区（渐变背景 - UI 现代化）
         Row() {
-          Text('Focus')
-            .fontSize(32)
+          Text('To do List')
+            .fontSize(26)
             .fontWeight(FontWeight.Bold)
-            .fontColor(Color.White)
+            .fontColor(Theme.COLOR_TEXT_PRIMARY)
         }
         .width('100%')
-        .height(80)
-        .padding({ left: Theme.SPACE_LARGE, top: Theme.SPACE_XLARGE, bottom: Theme.SPACE_LARGE })
-        .linearGradient({
-          angle: 135,
-          colors: [
-            [Theme.COLOR_PRIMARY_LIGHT, 0],
-            [Theme.COLOR_PRIMARY, 1]
-          ]
+        .height(64)
+        .padding({ left: 20, right: 20 })
+        .alignItems(VerticalAlign.Center)
+        .backgroundColor(Color.White)
+        .border({
+          width: { bottom: 1 },
+          color: Theme.COLOR_BORDER
         })
-        .shadow({
-          radius: Theme.SHADOW_MEDIUM.radius,
-          color: Theme.SHADOW_MEDIUM.color,
-          offsetX: 0,
-          offsetY: 4
-        })
-        // 任务列表或空状态
+
         if (this.taskState.loading) {
           Column() {
-            Text('加载中...')
+            Text('Loading tasks...')
               .fontSize(Theme.FONT_SIZE_MEDIUM)
               .fontColor(Theme.COLOR_TEXT_SECONDARY)
           }
           .layoutWeight(1)
           .justifyContent(FlexAlign.Center)
         } else if (this.taskState.tasks.length === 0) {
-          // 空状态
-          Column({ space: Theme.SPACE_LARGE }) {
+          Column({ space: Theme.SPACE_MEDIUM }) {
             Text('📝')
-              .fontSize(64)
-            Text('还没有任务?')
-              .fontSize(Theme.FONT_SIZE_LARGE)
-              .fontColor(Theme.COLOR_TEXT_PRIMARY)
-              .fontWeight(FontWeight.Medium)
-            
-            Text('点击下方按钮添加你的第一个任务，\n或直接开始快速专注')
+              .fontSize(48)
+            Text('No tasks yet. Add your first task to get started!')
               .fontSize(Theme.FONT_SIZE_MEDIUM)
-              .fontColor(Theme.COLOR_TEXT_TERTIARY)
+              .fontColor(Theme.COLOR_TEXT_SECONDARY)
               .textAlign(TextAlign.Center)
 
-            Button('开始快速专注')
-              .fontSize(Theme.FONT_SIZE_MEDIUM)
+            Button('Start without a task')
               .height(48)
               .backgroundColor(Theme.COLOR_PRIMARY)
+              .fontColor(Color.White)
               .borderRadius(Theme.BORDER_RADIUS_LARGE)
               .onClick(() => {
                 this.startFocusWithoutTask()
@@ -113,92 +95,144 @@ struct Index {
           }
           .layoutWeight(1)
           .justifyContent(FlexAlign.Center)
-          .padding(Theme.SPACE_LARGE)
+          .padding({ left: 24, right: 24 })
         } else {
-          // 任务列表
           List({ space: Theme.SPACE_MEDIUM }) {
             ForEach(this.taskState.tasks, (task: Task) => {
               ListItem() {
-                TaskItem({
-                  task: task,
-                  onStart: (t: Task) => {
-                    this.startFocusWithTask(t)
-                  },
-                  onResume: (t: Task) => {
-                    this.resumeActiveTask(t)
-                  },
-                  onDelete: (t: Task) => {
-                    this.deleteTask(t)
+                Row({ space: Theme.SPACE_MEDIUM }) {
+                  Column({ space: 6 }) {
+                    Text(task.title)
+                      .fontSize(18)
+                      .fontWeight(FontWeight.Medium)
+                      .fontColor(Theme.COLOR_TEXT_PRIMARY)
+                      .maxLines(1)
+                      .textOverflow({ overflow: TextOverflow.Ellipsis })
+                    if (task.description) {
+                      Text(task.description)
+                        .fontSize(14)
+                        .fontColor(Theme.COLOR_TEXT_SECONDARY)
+                        .maxLines(1)
+                        .textOverflow({ overflow: TextOverflow.Ellipsis })
+                    }
+                    Row({ space: Theme.SPACE_SMALL }) {
+                      Text(`Focus time: ${this.formatDuration(task.totalFocusTime)}`)
+                        .fontSize(12)
+                        .fontColor(Theme.COLOR_TEXT_TERTIARY)
+                    }
                   }
+                  .layoutWeight(1)
+                  .alignItems(HorizontalAlign.Start)
+
+                  if (this.isEditMode) {
+                    Row({ space: 8 }) {
+                      Button('Edit')
+                        .fontSize(14)
+                        .height(40)
+                        .backgroundColor('#E6F0FF')
+                        .fontColor(Theme.COLOR_PRIMARY)
+                        .borderRadius(12)
+                        .onClick(() => {
+                          this.goToTaskForm(task)
+                        })
+                      Button('Delete')
+                        .fontSize(14)
+                        .height(40)
+                        .backgroundColor('#FFEAEA')
+                        .fontColor(Theme.COLOR_ERROR)
+                        .borderRadius(12)
+                        .onClick(() => {
+                          this.deleteTarget = task
+                          this.confirmDelete()
+                        })
+                    }
+                  } else if (task.activeSessionId !== undefined && task.activeSessionId !== null) {
+                    Button({ type: ButtonType.Circle }) {
+                      Text('☕')
+                        .fontSize(22)
+                    }
+                    .width(48)
+                    .height(48)
+                    .backgroundColor('#F0E5FF')
+                    .onClick(() => {
+                      this.resumeActiveTask(task)
+                    })
+                  } else {
+                    Button({ type: ButtonType.Circle }) {
+                      Text('▶')
+                        .fontSize(20)
+                    }
+                    .width(48)
+                    .height(48)
+                    .backgroundColor('#E6FFFB')
+                    .onClick(() => {
+                      this.startFocusWithTask(task)
+                    })
+                  }
+                }
+                .width('100%')
+                .padding(16)
+                .backgroundColor(Color.White)
+                .borderRadius(16)
+                .shadow({
+                  radius: Theme.SHADOW_SMALL.radius,
+                  color: Theme.SHADOW_SMALL.color,
+                  offsetX: 0,
+                  offsetY: 2
                 })
               }
             }, (task: Task) => task.id.toString())
           }
           .width('100%')
           .layoutWeight(1)
-          .padding({ 
-            left: Theme.SPACE_MEDIUM, 
-            right: Theme.SPACE_MEDIUM, 
-            top: Theme.SPACE_MEDIUM,
-            bottom: Theme.SPACE_MEDIUM 
-          })
+          .padding({ left: 20, right: 20, top: 16, bottom: 80 })
         }
-        // 底部导航栏
+
         BottomNav({ currentIndex: 0 })
       }
       .width('100%')
       .height('100%')
-      .backgroundColor(Theme.COLOR_BACKGROUND)
+      .backgroundColor('#F7F8FA')
 
-      // 浮动按钮区
-      Column({ space: Theme.SPACE_SMALL }) {
-        // 快速专注按钮
+      Column({ space: 12 }) {
         Button({ type: ButtonType.Circle }) {
-          Text('+')  
+          Text(this.isEditMode ? '✕' : '✎')
             .fontSize(22)
             .fontColor(Color.White)
         }
-        .width(48)
-        .height(48)
-        .backgroundColor(Theme.COLOR_SUCCESS)
+        .width(64)
+        .height(64)
+        .backgroundColor(this.isEditMode ? '#FA8C16' : '#595959')
         .shadow({
           radius: Theme.SHADOW_MEDIUM.radius,
           color: Theme.SHADOW_MEDIUM.color,
-          offsetX: Theme.SHADOW_MEDIUM.offsetX,
-          offsetY: Theme.SHADOW_MEDIUM.offsetY
+          offsetX: 0,
+          offsetY: 6
         })
         .onClick(() => {
-          this.startFocusWithoutTask()
+          this.isEditMode = !this.isEditMode
         })
 
-        // 添加任务按钮（渐变色）
         Button({ type: ButtonType.Circle }) {
           Text('+')
-            .fontSize(36)
+            .fontSize(28)
             .fontColor(Color.White)
-            .fontWeight(FontWeight.Medium)
         }
         .width(64)
         .height(64)
-        .linearGradient({
-          angle: 135,
-          colors: [
-            [Theme.COLOR_PRIMARY_LIGHT, 0],
-            [Theme.COLOR_PRIMARY, 1]
-          ]
-        })
+        .backgroundColor(Theme.COLOR_PRIMARY)
         .shadow({
-          radius: Theme.SHADOW_LARGE.radius,
-          color: Theme.SHADOW_LARGE.color,
-          offsetX: Theme.SHADOW_LARGE.offsetX,
-          offsetY: Theme.SHADOW_LARGE.offsetY
+          radius: Theme.SHADOW_MEDIUM.radius,
+          color: Theme.SHADOW_MEDIUM.color,
+          offsetX: 0,
+          offsetY: 6
         })
         .onClick(() => {
-          router.pushUrl({ url: 'pages/TaskEditPage' })
+          this.goToTaskForm()
         })
       }
-      .margin({ right: Theme.SPACE_LARGE, bottom: 90 })
-      // 会话恢复对话框
+      .margin({ right: 20, bottom: 96 })
+
       if (this.showRecoverDialog) {
         this.RecoverDialog()
       }
@@ -206,20 +240,16 @@ struct Index {
     .width('100%')
     .height('100%')
   }
-  // 会话恢复对话框组件
+
   @Builder
   RecoverDialog() {
     Column() {
-      // 半透明遮罩
       Column()
         .width('100%')
         .height('100%')
         .backgroundColor('#00000060')
-        .onClick(() => {
-          // 点击遮罩不关闭，必须选择
-        })
+        .onClick(() => {})
 
-      // 对话框内容
       Column({ space: Theme.SPACE_LARGE }) {
         Text('发现未完成的专注')
           .fontSize(Theme.FONT_SIZE_LARGE)
@@ -251,7 +281,6 @@ struct Index {
             .backgroundColor(Theme.COLOR_TEXT_TERTIARY)
             .borderRadius(Theme.BORDER_RADIUS_LARGE)
             .onClick(async () => {
-              // 放弃会话 - 将其标记为完成
               if (this.recoveredSession) {
                 await FocusStore.finishFocus()
               }
@@ -267,7 +296,6 @@ struct Index {
             .borderRadius(Theme.BORDER_RADIUS_LARGE)
             .onClick(async () => {
               this.showRecoverDialog = false
-              // 恢复会话并跳转
               if (this.recoveredSession) {
                 await FocusStore.recoverSession(this.recoveredSession)
                 router.pushUrl({ url: 'pages/FocusPage' })
@@ -290,52 +318,80 @@ struct Index {
     }
   }
 
-  // 格式化时间
   private formatDuration(ms: number): string {
     const seconds = Math.floor(ms / 1000)
     const minutes = Math.floor(seconds / 60)
     const hours = Math.floor(minutes / 60)
-    
+
     if (hours > 0) {
-      return `${hours}小时${minutes % 60}分钟`
-    } else if (minutes > 0) {
-      return `${minutes}分钟`
-    } else {
-      return `${seconds}秒`
+      if (minutes % 60 > 0) {
+        return `${hours}h ${minutes % 60}m`
+      }
+      return `${hours}h`
     }
+    return `${minutes}m`
   }
 
-  // 无任务开始专注
   private async startFocusWithoutTask() {
-    router.pushUrl({ url: 'pages/StartPage' })
+    router.pushUrl({ url: 'pages/FocusPage', params: { startAnonymous: true } })
   }
 
-  // 有任务开始专注
   private async startFocusWithTask(task: Task) {
-    router.pushUrl({ 
-      url: 'pages/StartPage',
-      params: { taskId: task.id, taskTitle: task.title }
+    router.pushUrl({
+      url: 'pages/FocusPage',
+      params: { pendingTaskId: task.id }
     })
   }
 
-  // 恢复活动任务（直接跳转TimerPage）
   private async resumeActiveTask(task: Task) {
     Logger.info(`Resuming active task: ${task.id}`)
-    
-    // 直接跳转到TimerPage恢复会话
-    router.pushUrl({ 
+    router.pushUrl({
       url: 'pages/FocusPage',
       params: { resumeTaskId: task.id }
     })
   }
 
-  // 删除任务
   private async deleteTask(task: Task) {
     const result = await TaskStore.deleteTask(task.id)
     if (result.ok) {
-      promptAction.showToast({ message: '任务已删除' })
+      promptAction.showToast({ message: 'Task deleted' })
     } else {
       promptAction.showToast({ message: result.message ?? 'Unknown error' })
+    }
+  }
+
+  private confirmDelete() {
+    if (!this.deleteTarget) {
+      return
+    }
+    AlertDialog.show({
+      title: 'Delete Task?',
+      message: `Are you sure you want to delete "${this.deleteTarget.title}"?`,
+      primaryButton: {
+        value: 'Cancel',
+        action: () => {}
+      },
+      secondaryButton: {
+        value: 'Delete',
+        fontColor: Theme.COLOR_ERROR,
+        action: async () => {
+          if (this.deleteTarget) {
+            await this.deleteTask(this.deleteTarget)
+            this.deleteTarget = null
+          }
+        }
+      }
+    })
+  }
+
+  private goToTaskForm(task?: Task) {
+    if (task) {
+      router.pushUrl({
+        url: 'pages/StartPage',
+        params: { taskId: task.id }
+      })
+    } else {
+      router.pushUrl({ url: 'pages/StartPage' })
     }
   }
 }
