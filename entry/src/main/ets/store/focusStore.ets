@@ -195,6 +195,56 @@ export class FocusStore {
   }
 
   /**
+   * 结束当前会话（用户暂停触发，记录为已完成）
+   */
+  static async endSessionByPause(): Promise<Result<void>> {
+    if (!FocusStore.context || !FocusStore.state.currentSession) {
+      return fail('NO_SESSION', '无进行中的会话')
+    }
+
+    const session = FocusStore.state.currentSession
+    const now = Date.now()
+    let actualDuration = session.actualFocusDuration
+
+    if (session.status === SessionStatus.RUNNING && FocusStore.state.currentSegment) {
+      const elapsedMs = TimerService.stop()
+      await SegmentRepo.update(FocusStore.context, FocusStore.state.currentSegment.id, {
+        endAt: now,
+        durationMs: elapsedMs
+      })
+      actualDuration += elapsedMs
+    } else {
+      TimerService.stop()
+    }
+
+    const totalDuration = now - session.startAt
+    await SessionRepo.update(FocusStore.context, session.id, {
+      endAt: now,
+      status: SessionStatus.FINISHED,
+      actualFocusDuration: actualDuration,
+      totalDuration: totalDuration,
+      interruptionReason: Constants.INTERRUPTION_USER_PAUSED
+    })
+
+    if (session.taskId !== undefined) {
+      const taskResult = await TaskRepo.findById(FocusStore.context, session.taskId)
+      if (taskResult.ok) {
+        const task = taskResult.data
+        await TaskRepo.update(FocusStore.context, session.taskId, {
+          lastCompletedAt: now,
+          totalFocusTime: task.totalFocusTime + actualDuration
+        })
+        await TaskRepo.incrementSessionCount(FocusStore.context, session.taskId)
+        await TaskRepo.updateActiveSession(FocusStore.context, session.taskId, undefined)
+      }
+    }
+
+    FocusStore.clearState()
+    Logger.info(`Focus ended by pause with ${actualDuration}ms`)
+    return success(undefined)
+  }
+
+  /**
    * 继续专注（新段）
    */
   static async resumeFocus(): Promise<Result<void>> {
@@ -335,13 +385,6 @@ export class FocusStore {
     // 保存 breakId 以便后续更新
     const breakId = breakResult.data
 
-    // 更新会话休息次数
-    const newBreakCount = FocusStore.state.currentSession.breakCount + 1
-    await SessionRepo.update(FocusStore.context, sessionId, {
-      breakCount: newBreakCount
-    })
-
-    FocusStore.state.currentSession.breakCount = newBreakCount
     FocusStore.state.currentBreakId = breakId
     FocusStore.state.isBreaking = true
     FocusStore.state.breakStartAt = now
@@ -392,6 +435,17 @@ export class FocusStore {
     FocusStore.state.breakStartAt = null
     FocusStore.state.breakElapsedTime = 0
     FocusStore.state.currentBreakId = null
+
+    // 休息结束后再累计休息次数
+    if (FocusStore.state.currentSession) {
+      const newBreakCount = (FocusStore.state.currentSession.breakCount ?? 0) + 1
+      await SessionRepo.update(FocusStore.context, FocusStore.state.currentSession.id, {
+        breakCount: newBreakCount
+      })
+      FocusStore.state.currentSession.breakCount = newBreakCount
+      // 休息结束后自动继续专注（新段）
+      await FocusStore.resumeFocus()
+    }
 
     // 取消提醒
     if (FocusStore.state.breakReminderId !== -1) {

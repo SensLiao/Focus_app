@@ -1,316 +1,209 @@
 /**
- * 启动配置页 - 极简现代风格（Minimalist Design）
- * 用户在此配置专注参数，然后启动会话
+ * Task creation / edit page - adapted to sample_frontend StartPage
  */
 import router from '@ohos.router'
 import promptAction from '@ohos.promptAction'
-import { FocusStore } from '../store/focusStore'
 import { TaskStore } from '../store/taskStore'
+import { FocusStore } from '../store/focusStore'
 import { SessionType } from '../model/FocusSession'
-import { SessionRepo } from '../data/SessionRepo'
+import { Theme } from '../common/theme'
 
 interface RouterParams {
   taskId?: number
-  taskTitle?: string
 }
 
 @Entry
 @Component
 struct StartPage {
   @State taskId: number | null = null
-  @State taskTitle: string = 'Anonymous'
-  @State isCountdownMode: boolean = false
-  @State countdownMinutes: number = 25
-  @State restCount: number = 0
-  @State restTimeMinutes: number = 0
-  @State sessionCount: number = 0
+  @State taskTitle: string = ''
+  @State taskDescription: string = ''
+  @State loading: boolean = true
+  @State saving: boolean = false
+
   async aboutToAppear() {
-    // 从路由参数获取taskId和taskTitle
+    TaskStore.init(getContext(this))
+    FocusStore.init(getContext(this))
+
     const params = router.getParams() as RouterParams
-    if (params?.taskId) {
+    if (params && params.taskId !== undefined) {
       this.taskId = params.taskId
-      this.taskTitle = params.taskTitle ?? 'Anonymous'
-      // 也可以从TaskStore查找确认
-      const task = TaskStore.findTask(this.taskId)
+      const task = TaskStore.findTask(params.taskId)
       if (task) {
         this.taskTitle = task.title
+        this.taskDescription = task.description ?? ''
       }
     }
-
-    // 加载统计数据
-    await this.loadStats()
-  }
-
-  // 加载统计数据
-  private async loadStats() {
-    const ctx = getContext(this)
-    const stats = await SessionRepo.getStats(ctx)
-    
-    if (stats.ok && stats.data) {
-      this.sessionCount = stats.data.sessionCount
-    }
-  }
-  // 开始专注会话
-  private async startFocusSession() {
-    const sessionType = this.isCountdownMode ? SessionType.COUNTDOWN : SessionType.NORMAL
-    const timeLimitMs = this.isCountdownMode ? this.countdownMinutes * 60 * 1000 : undefined
-    const taskId = this.taskId !== null ? this.taskId : undefined
-    
-    const result = await FocusStore.startFocus(taskId, timeLimitMs, sessionType)
-    if (result.ok) {
-      // 使用replaceUrl替换当前页面，防止返回到配置页
-      router.replaceUrl({ url: 'pages/FocusPage' })
-    } else {
-      promptAction.showToast({ message: result.message ?? '启动失败' })
-    }
-  }
-
-  // 创建任务
-  private createTask() {
-    router.push({ url: 'pages/TaskEditPage' })
-  }
-
-  // 返回首页
-  private goBack() {
-    router.back()
-  }
-
-  // 查看详情
-  private viewDetail() {
-    router.push({ url: 'pages/HistoryPage' })
+    this.loading = false
   }
 
   build() {
     Column() {
-      // ====== A. Header ======
-      Row() {
-        // 返回按钮
-        Text('←')
+      Row({ space: 12 }) {
+        Text('<')
           .fontSize(24)
           .fontColor('#1A1A2E')
           .onClick(() => {
-            this.goBack()
+            router.back()
           })
 
-        Blank()
-
-        // 页面标题
-        Text(this.taskTitle)
-          .fontSize(18)
+        Text(this.taskId !== null ? 'Edit Task' : 'New Task')
+          .fontSize(22)
           .fontWeight(FontWeight.Medium)
           .fontColor('#1A1A2E')
-
-        Blank()
       }
       .width('100%')
-      .height(56)
-      .padding({ left: 20, right: 20 })
+      .height(64)
+      .padding({ left: 16, right: 16 })
       .alignItems(VerticalAlign.Center)
+      .backgroundColor(Color.White)
+      .border({
+        width: { bottom: 1 },
+        color: Theme.COLOR_BORDER
+      })
 
-      // ====== B. Main Timer Section ======
-      Column() {
-        // 大圆形进度指示器（静态占位）
-        Stack() {
-          // 外圈背景（淡紫色）
-          Circle()
-            .width(280)
-            .height(280)
-            .fill('#E0E0F5')
-            .shadow({
-              radius: 24,
-              color: '#3B66F520',
-              offsetX: 0,
-              offsetY: 8
-            })
-
-          // 圆内内容
-          Column({ space: 12 }) {
-            Text('Focus time')
-              .fontSize(14)
-              .fontColor('#8F9098')
-
-            Text('0:00')
-              .fontSize(64)
-              .fontWeight(FontWeight.Bold)
-              .fontColor('#1A1A2E')
-
-            Text('Total focus: 0:00')
-              .fontSize(12)
-              .fontColor('#8F9098')
-          }
+      if (this.loading) {
+        Column() {
+          Text('Loading...')
+            .fontSize(Theme.FONT_SIZE_MEDIUM)
+            .fontColor(Theme.COLOR_TEXT_SECONDARY)
         }
-        .margin({ top: 40, bottom: 40 })
-      }
-      .width('100%')
-      .layoutWeight(1)
-      .justifyContent(FlexAlign.Start)
-
-      // ====== C. Mode Toggle ======
-      Row({ space: 12 }) {
-        Toggle({ type: ToggleType.Switch, isOn: this.isCountdownMode })
-          .selectedColor('#2F54EB')
-          .onChange((isOn: boolean) => {
-            this.isCountdownMode = isOn
-          })
-
-        Text('Countdown Mode')
-          .fontSize(16)
-          .fontColor('#1A1A2E')
-      }
-      .width('100%')
-      .padding({ left: 24, right: 24 })
-      .justifyContent(FlexAlign.Center)
-      .margin({ bottom: 16 })
-
-      // 倒计时时长设置（仅倒计时模式显示）
-      if (this.isCountdownMode) {
-        Row({ space: 12 }) {
-          Text('Duration:')
-            .fontSize(14)
-            .fontColor('#8F9098')
-
-          Button(`${this.countdownMinutes} min`)
-            .fontSize(14)
-            .height(36)
-            .backgroundColor('#F5F5F7')
-            .fontColor('#1A1A2E')
-            .borderRadius(8)
-            .onClick(() => {
-              // 简单的时长选择（可扩展为picker）
-              if (this.countdownMinutes === 25) {
-                this.countdownMinutes = 45
-              } else if (this.countdownMinutes === 45) {
-                this.countdownMinutes = 60
-              } else {
-                this.countdownMinutes = 25
-              }
-            })
-        }
-        .width('100%')
-        .padding({ left: 24, right: 24 })
+        .layoutWeight(1)
         .justifyContent(FlexAlign.Center)
-        .margin({ bottom: 16 })
-      }
+      } else {
+        Column({ space: 16 }) {
+          Column({ space: 8 }) {
+            Text('Task Name')
+              .fontSize(16)
+              .fontColor('#1A1A2E')
+            TextInput({ placeholder: 'Enter task name', text: this.taskTitle })
+              .width('100%')
+              .height(52)
+              .borderRadius(12)
+              .backgroundColor(Color.White)
+              .border({ width: 1, color: Theme.COLOR_BORDER })
+              .padding({ left: 12, right: 12 })
+              .onChange((value: string) => {
+                this.taskTitle = value
+              })
+          }
 
-      // ====== D. Primary Action Buttons ======
-      Column({ space: 12 }) {
-        // 主按钮：开始专注
-        Button('Start Focus Session')
-          .width('100%')
-          .height(56)
-          .fontSize(16)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#FFFFFF')
-          .backgroundColor('#2F54EB')
-          .borderRadius(28)
-          .shadow({
-            radius: 12,
-            color: '#2F54EB40',
-            offsetX: 0,
-            offsetY: 4
-          })
-          .onClick(() => {
-            this.startFocusSession()
-          })
+          Column({ space: 8 }) {
+            Text('Task Description')
+              .fontSize(16)
+              .fontColor('#1A1A2E')
+            TextArea({ placeholder: 'Enter task description (optional)', text: this.taskDescription })
+              .width('100%')
+              .height(140)
+              .borderRadius(12)
+              .backgroundColor(Color.White)
+              .border({ width: 1, color: Theme.COLOR_BORDER })
+              .padding({ left: 12, right: 12, top: 12, bottom: 12 })
+              .onChange((value: string) => {
+                this.taskDescription = value
+              })
+          }
 
-        // 次要按钮：创建任务（仅无任务时显示）
-        if (this.taskId === null) {
-          Button('Create Task First')
-            .width('100%')
-            .height(48)
-            .fontSize(14)
-            .fontWeight(FontWeight.Regular)
-            .fontColor('#2F54EB')
-            .backgroundColor('#F5F5F7')
-            .borderRadius(24)
-            .onClick(() => {
-              this.createTask()
-            })
-        }
-      }
-      .width('100%')
-      .padding({ left: 24, right: 24, bottom: 20 })
-
-      // ====== E. Statistics Cards ======
-      Column({ space: 12 }) {
-        // Card 1: 休息统计
-        Row() {
-          Column() {
-            Text('Rest Count')
-              .fontSize(12)
-              .fontColor('#8F9098')
-            Text(this.restCount.toString())
+          Column({ space: 12 }) {
+            Button(this.taskId !== null ? 'Update' : 'Create & Start')
+              .width('100%')
+              .height(56)
               .fontSize(16)
               .fontWeight(FontWeight.Medium)
-              .fontColor('#1A1A2E')
-              .margin({ top: 4 })
-          }
-          .alignItems(HorizontalAlign.Start)
+              .fontColor(Color.White)
+              .backgroundColor(Theme.COLOR_PRIMARY)
+              .borderRadius(16)
+              .enabled(!this.saving && this.taskTitle.trim().length > 0)
+              .onClick(() => {
+                if (this.taskId !== null) {
+                  this.saveTask()
+                } else {
+                  this.createAndStart()
+                }
+              })
 
-          Blank()
-
-          Column() {
-            Text('Rest Time')
-              .fontSize(12)
-              .fontColor('#8F9098')
-            Text(`${this.restTimeMinutes} min`)
-              .fontSize(16)
-              .fontWeight(FontWeight.Medium)
-              .fontColor('#1A1A2E')
-              .margin({ top: 4 })
+            if (this.taskId === null) {
+              Button('Start without a task')
+                .width('100%')
+                .height(52)
+                .fontSize(15)
+                .fontColor('#4B5563')
+                .backgroundColor('#F3F4F6')
+                .borderRadius(14)
+                .enabled(!this.saving)
+                .onClick(() => {
+                  this.startWithoutTask()
+                })
+            }
           }
-          .alignItems(HorizontalAlign.End)
+          .padding({ top: 12 })
         }
-        .width('100%')
-        .padding(20)
-        .backgroundColor('#FFFFFF')
-        .borderRadius(16)
-        .shadow({
-          radius: 8,
-          color: '#1A1A2E10',
-          offsetX: 0,
-          offsetY: 2
-        })
-
-        // Card 2: 会话统计
-        Row() {
-          Column() {
-            Text('Focus session')
-              .fontSize(12)
-              .fontColor('#8F9098')
-            Text(this.sessionCount.toString())
-              .fontSize(16)
-              .fontWeight(FontWeight.Medium)
-              .fontColor('#1A1A2E')
-              .margin({ top: 4 })
-          }
-          .alignItems(HorizontalAlign.Start)
-
-          Blank()
-
-          Text('View Detail')
-            .fontSize(14)
-            .fontColor('#2F54EB')
-            .onClick(() => {
-              this.viewDetail()
-            })
-        }
-        .width('100%')
-        .padding(20)
-        .backgroundColor('#FFFFFF')
-        .borderRadius(16)
-        .shadow({
-          radius: 8,
-          color: '#1A1A2E10',
-          offsetX: 0,
-          offsetY: 2
-        })
+        .padding({ left: 20, right: 20, top: 20, bottom: 32 })
+        .layoutWeight(1)
+        .backgroundColor('#F7F8FA')
       }
-      .width('100%')
-      .padding({ left: 24, right: 24, bottom: 24 })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#F9FAFB')
+    .backgroundColor('#F7F8FA')
+  }
+
+  private async saveTask() {
+    if (this.taskId === null) {
+      return
+    }
+    if (this.taskTitle.trim() === '') {
+      promptAction.showToast({ message: 'Please enter task name' })
+      return
+    }
+    this.saving = true
+    const result = await TaskStore.updateTask(this.taskId, {
+      title: this.taskTitle.trim(),
+      description: this.taskDescription.trim() || undefined
+    })
+    this.saving = false
+    if (result.ok) {
+      promptAction.showToast({ message: 'Task updated' })
+      router.back()
+    } else {
+      promptAction.showToast({ message: result.message ?? 'Update failed' })
+    }
+  }
+
+  private async createAndStart() {
+    if (this.taskTitle.trim() === '') {
+      promptAction.showToast({ message: 'Please enter task name' })
+      return
+    }
+    this.saving = true
+    const createResult = await TaskStore.createTask({
+      title: this.taskTitle.trim(),
+      description: this.taskDescription.trim() || undefined
+    })
+    if (!createResult.ok || createResult.data === undefined) {
+      this.saving = false
+      promptAction.showToast({ message: createResult.message ?? 'Create failed' })
+      return
+    }
+
+    const taskId = createResult.data
+    const focusResult = await FocusStore.startFocus(taskId, undefined, SessionType.NORMAL)
+    this.saving = false
+
+    if (focusResult.ok) {
+      router.replaceUrl({ url: 'pages/FocusPage', params: { pendingTaskId: taskId } })
+    } else {
+      promptAction.showToast({ message: focusResult.message ?? 'Unable to start focus' })
+    }
+  }
+
+  private async startWithoutTask() {
+    const focusResult = await FocusStore.startFocus(undefined, undefined, SessionType.NORMAL)
+    if (focusResult.ok) {
+      router.replaceUrl({ url: 'pages/FocusPage', params: { startAnonymous: true } })
+    } else {
+      promptAction.showToast({ message: focusResult.message ?? 'Unable to start focus' })
+    }
   }
 }
+
