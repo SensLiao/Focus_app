@@ -16,6 +16,7 @@ interface SessionSummary {
   date: number
   focusDuration: number
   restDuration: number
+  status: SessionStatus
 }
 
 interface RouterParams {
@@ -30,6 +31,8 @@ struct FocusPage {
   @State focusState: FocusState = FocusStore.getState()
   @State taskTitle: string = 'Focus Timer'
   @State taskDescription: string = ''
+  @State taskTotalFocusTime: number = 0
+  @State completedFocusOffset: number = 0
   @State isIdle: boolean = false
   @State isCountdownMode: boolean = false
   @State countdownMinutes: number = 25
@@ -40,6 +43,9 @@ struct FocusPage {
   @State showLeaveWarning: boolean = false
   @State showActiveTaskWarning: boolean = false
   @State sessionDetails: SessionSummary[] = []
+  @State sessionSheetVisible: boolean = false
+  @State sessionSheetOffset: number = 380
+  @State sessionSheetOpacity: number = 0
   private timerInterval: number = -1
 
   async aboutToAppear() {
@@ -75,9 +81,11 @@ struct FocusPage {
       const task = TaskStore.findTask(this.pendingTaskId)
       this.taskTitle = task?.title ?? 'Focus Timer'
       this.taskDescription = task?.description ?? ''
+      this.taskTotalFocusTime = task?.totalFocusTime ?? 0
       await this.loadSessionDetails(task?.id)
     } else if (this.startAnonymous) {
       this.taskTitle = 'Anonymous'
+      this.taskTotalFocusTime = 0
     }
 
     this.isIdle = true
@@ -106,9 +114,11 @@ struct FocusPage {
       if (task) {
         this.taskTitle = task.title
         this.taskDescription = task.description ?? ''
+        this.taskTotalFocusTime = task.totalFocusTime ?? 0
       }
     } else if (this.startAnonymous) {
       this.taskTitle = 'Anonymous'
+      this.taskTotalFocusTime = 0
     }
   }
 
@@ -229,6 +239,11 @@ struct FocusPage {
     return this.focusState.currentSession?.breakCount ?? 0
   }
 
+  private getTotalRestTime(): number {
+    const total = this.focusState.currentSession?.restDurationMs ?? 0
+    return this.focusState.isBreaking ? total + this.focusState.breakElapsedTime : total
+  }
+
   private isRunning(): boolean {
     return this.focusState.currentSession?.status === SessionStatus.RUNNING
   }
@@ -262,20 +277,26 @@ struct FocusPage {
     }
 
     const summaries: SessionSummary[] = []
+    let completedFocus = 0
     for (const session of sessionsResult.data) {
       let restDuration = 0
       const breaksResult = await BreakRepo.findBySessionId(getContext(this), session.id)
       if (breaksResult.ok && breaksResult.data) {
         restDuration = breaksResult.data.reduce((sum, b) => sum + (b.actualDuration ?? 0), 0)
       }
+      if (session.status === SessionStatus.FINISHED) {
+        completedFocus += session.actualFocusDuration
+      }
       summaries.push({
         id: session.id,
         date: session.startAt,
         focusDuration: session.actualFocusDuration,
-        restDuration: restDuration
+        restDuration: restDuration,
+        status: session.status
       })
     }
     this.sessionDetails = summaries
+    this.completedFocusOffset = completedFocus
   }
 
   private formatSessionDate(ts: number): string {
@@ -356,7 +377,7 @@ struct FocusPage {
                   .fontSize(64)
                   .fontWeight(FontWeight.Bold)
                   .fontColor('#111827')
-                Text(`Total focus: ${this.formatTime(this.getElapsedMs())}`)
+                Text(`Total focus: ${this.formatTime(this.completedFocusOffset + this.getElapsedMs())}`)
                   .fontSize(12)
                   .fontColor('#9CA3AF')
               }
@@ -498,7 +519,7 @@ struct FocusPage {
                 Text('Rest Time')
                   .fontSize(13)
                   .fontColor('#6B7280')
-                Text(this.formatTime(this.focusState.breakElapsedTime))
+                Text(this.formatTime(this.getTotalRestTime()))
                   .fontSize(16)
                   .fontWeight(FontWeight.Medium)
                   .fontColor('#111827')
@@ -513,13 +534,23 @@ struct FocusPage {
           .shadow({ radius: 6, color: '#11182710', offsetX: 0, offsetY: 2 })
 
           Column() {
-            Row() {
-              Text('Focus session: ')
+            Row({ space: 8 }) {
+              Text('Focus sessions')
                 .fontSize(15)
                 .fontColor('#111827')
-              Text(this.focusState.currentSession ? '1+' : '0')
+              Text(this.sessionDetails.length.toString())
                 .fontSize(15)
                 .fontColor('#2F54EB')
+              Blank()
+              Button('View Detail')
+                .fontSize(14)
+                .height(32)
+                .backgroundColor('#E6F0FF')
+                .fontColor('#2F54EB')
+                .borderRadius(16)
+                .onClick(() => {
+                  this.openSessionDetails()
+                })
             }
           }
           .width('100%')
@@ -527,48 +558,6 @@ struct FocusPage {
           .backgroundColor(Color.White)
           .borderRadius(14)
           .shadow({ radius: 6, color: '#11182710', offsetX: 0, offsetY: 2 })
-
-          Column({ space: 8 }) {
-            Text('Session Details')
-              .fontSize(16)
-              .fontWeight(FontWeight.Medium)
-              .fontColor('#111827')
-
-            if (this.sessionDetails.length === 0) {
-              Text('No completed sessions yet.')
-                .fontSize(13)
-                .fontColor('#6B7280')
-            } else {
-              List({ space: 8 }) {
-                ForEach(this.sessionDetails, (item: SessionSummary) => {
-                  ListItem() {
-                    Column({ space: 4 }) {
-                      Text(this.formatSessionDate(item.date))
-                        .fontSize(13)
-                        .fontColor('#6B7280')
-                      Row({ space: 12 }) {
-                        Text(`Focus: ${this.formatTime(item.focusDuration)}`)
-                          .fontSize(14)
-                          .fontColor('#111827')
-                        Text(`Rest: ${this.formatTime(item.restDuration)}`)
-                          .fontSize(14)
-                          .fontColor('#111827')
-                      }
-                    }
-                    .width('100%')
-                    .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-                    .backgroundColor(Color.White)
-                    .borderRadius(12)
-                    .shadow({ radius: 4, color: '#1118270f', offsetX: 0, offsetY: 1 })
-                  }
-                }, (item: SessionSummary) => item.id.toString())
-              }
-              .width('100%')
-              .height('auto')
-            }
-          }
-          .width('100%')
-          .padding({ left: 16, right: 16, top: 8, bottom: 12 })
         }
         .layoutWeight(1)
         .backgroundColor('#F7F8FA')
@@ -587,6 +576,10 @@ struct FocusPage {
 
       if (this.showActiveTaskWarning) {
         this.ActiveTaskDialog()
+      }
+
+      if (this.sessionSheetVisible) {
+        this.SessionDetailsDialog()
       }
     }
     .width('100%')
@@ -760,5 +753,107 @@ struct FocusPage {
     .shadow({ radius: 16, color: '#11182726', offsetX: 0, offsetY: 8 })
     .position({ x: '7.5%', y: '35%' })
   }
-}
 
+  @Builder
+  SessionDetailsDialog() {
+    Column() {
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor('#00000060')
+        .opacity(this.sessionSheetOpacity)
+        .animation({ duration: 220, curve: Curve.EaseInOut })
+        .onClick(() => {
+          this.closeSessionDetails()
+        })
+    }
+    .width('100%')
+    .height('100%')
+    .position({ x: 0, y: 0 })
+
+    Column({ space: 12 }) {
+      Row() {
+        Text('Session Details')
+          .fontSize(18)
+          .fontWeight(FontWeight.Medium)
+          .fontColor('#111827')
+        Blank()
+        Button('Close')
+          .fontSize(14)
+          .height(32)
+          .backgroundColor('#F3F4F6')
+          .fontColor('#4B5563')
+          .borderRadius(16)
+          .onClick(() => {
+            this.closeSessionDetails()
+          })
+      }
+
+      if (this.sessionDetails.length === 0) {
+        Text('No completed sessions yet.')
+          .fontSize(13)
+          .fontColor('#6B7280')
+      } else {
+        List({ space: 8 }) {
+          ForEach(this.sessionDetails, (item: SessionSummary) => {
+            ListItem() {
+              Column({ space: 4 }) {
+                Text(this.formatSessionDate(item.date))
+                  .fontSize(13)
+                  .fontColor('#6B7280')
+                      Row({ space: 12 }) {
+                        Text(`Focus: ${item.status === SessionStatus.FINISHED ? this.formatTime(item.focusDuration) : 'In progress'}`)
+                          .fontSize(14)
+                          .fontColor('#111827')
+                        Text(`Rest: ${item.status === SessionStatus.FINISHED ? this.formatTime(item.restDuration) : 'In progress'}`)
+                          .fontSize(14)
+                          .fontColor('#111827')
+                      }
+              }
+              .width('100%')
+              .padding({ left: 12, right: 12, top: 10, bottom: 10 })
+              .backgroundColor(Color.White)
+              .borderRadius(12)
+              .shadow({ radius: 4, color: '#1118270f', offsetX: 0, offsetY: 1 })
+            }
+          }, (item: SessionSummary) => item.id.toString())
+        }
+        .width('100%')
+        .height(320)
+      }
+    }
+    .width('100%')
+    .height('60%')
+    .padding(20)
+    .backgroundColor(Color.White)
+    .borderRadius(16)
+    .shadow({ radius: 16, color: '#11182726', offsetX: 0, offsetY: 8 })
+    .position({ x: 0, y: '40%' })
+    .translate({ x: 0, y: this.sessionSheetOffset })
+    .animation({ duration: 260, curve: Curve.EaseInOut })
+  }
+
+  private openSessionDetails() {
+    if (this.sessionSheetVisible) {
+      return
+    }
+    this.sessionSheetVisible = true
+    this.sessionSheetOffset = 500
+    this.sessionSheetOpacity = 0
+    setTimeout(() => {
+      this.sessionSheetOffset = 0
+      this.sessionSheetOpacity = 1
+    }, 10)
+  }
+
+  private closeSessionDetails() {
+    if (!this.sessionSheetVisible) {
+      return
+    }
+    this.sessionSheetOffset = 500
+    this.sessionSheetOpacity = 0
+    setTimeout(() => {
+      this.sessionSheetVisible = false
+    }, 260)
+  }
+}
