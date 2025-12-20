@@ -105,7 +105,7 @@ struct StartPage {
           }
 
           Column({ space: 12 }) {
-            Button(this.taskId !== null ? 'Update' : 'Create & Start')
+            Button(this.taskId !== null ? 'Update' : 'Create')
               .width('100%')
               .height(56)
               .fontSize(16)
@@ -118,7 +118,7 @@ struct StartPage {
                 if (this.taskId !== null) {
                   this.saveTask()
                 } else {
-                  this.createAndStart()
+                  this.createTask()
                 }
               })
 
@@ -170,7 +170,7 @@ struct StartPage {
     }
   }
 
-  private async createAndStart() {
+  private async createTask() {
     if (this.taskTitle.trim() === '') {
       promptAction.showToast({ message: 'Please enter task name' })
       return
@@ -186,15 +186,10 @@ struct StartPage {
       return
     }
 
-    const taskId = createResult.data
-    const focusResult = await FocusStore.startFocus(taskId, undefined, SessionType.NORMAL)
     this.saving = false
 
-    if (focusResult.ok) {
-      router.replaceUrl({ url: 'pages/FocusPage', params: { pendingTaskId: taskId } })
-    } else {
-      promptAction.showToast({ message: focusResult.message ?? 'Unable to start focus' })
-    }
+    const taskId = createResult.data
+    router.replaceUrl({ url: 'pages/FocusPage', params: { pendingTaskId: taskId } })
   }
 
   private async startWithoutTask() {
@@ -206,4 +201,3 @@ struct StartPage {
     }
   }
 }
-

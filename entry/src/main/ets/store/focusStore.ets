@@ -189,6 +189,10 @@ export class FocusStore {
     FocusStore.state.currentSession.status = SessionStatus.PAUSED
     FocusStore.state.currentSession.actualFocusDuration = newActualDuration
     FocusStore.state.currentSession.totalDuration = newTotalDuration
+    FocusStore.state.elapsedTime = 0
+    if (FocusStore.state.currentSession.timeLimitMs && FocusStore.state.currentSession.timeLimitMs > 0) {
+      FocusStore.state.remainingTime = Math.max(0, FocusStore.state.currentSession.timeLimitMs - newActualDuration)
+    }
 
     Logger.info(`Focus paused at ${elapsedMs}ms`)
     return success(undefined)
@@ -231,7 +235,6 @@ export class FocusStore {
       if (taskResult.ok) {
         const task = taskResult.data
         await TaskRepo.update(FocusStore.context, session.taskId, {
-          lastCompletedAt: now,
           totalFocusTime: task.totalFocusTime + actualDuration
         })
         await TaskRepo.incrementSessionCount(FocusStore.context, session.taskId)
@@ -294,6 +297,12 @@ export class FocusStore {
     // 启动计时器
     TimerService.start((elapsedMs) => {
       FocusStore.state.elapsedTime = elapsedMs
+      if (FocusStore.state.currentSession && FocusStore.state.currentSession.timeLimitMs && FocusStore.state.currentSession.timeLimitMs > 0) {
+        FocusStore.state.remainingTime = Math.max(0, FocusStore.state.currentSession.timeLimitMs - (FocusStore.state.currentSession.actualFocusDuration + elapsedMs))
+        if (FocusStore.state.remainingTime <= 0) {
+          FocusStore.finishFocus()
+        }
+      }
     })
 
     Logger.info(`Focus resumed with segment ${nextIndex}`)
@@ -367,6 +376,8 @@ export class FocusStore {
 
     // 暂停当前专注
     await FocusStore.pauseFocus()
+    // 重置计时器内部状态，避免休息计时继承专注的已用时间
+    TimerService.stop()
 
     const now = Date.now()
     const sessionId = FocusStore.state.currentSession.id
@@ -439,10 +450,13 @@ export class FocusStore {
     // 休息结束后再累计休息次数
     if (FocusStore.state.currentSession) {
       const newBreakCount = (FocusStore.state.currentSession.breakCount ?? 0) + 1
+      const newRestDuration = (FocusStore.state.currentSession.restDurationMs ?? 0) + elapsedMs
       await SessionRepo.update(FocusStore.context, FocusStore.state.currentSession.id, {
-        breakCount: newBreakCount
+        breakCount: newBreakCount,
+        restDurationMs: newRestDuration
       })
       FocusStore.state.currentSession.breakCount = newBreakCount
+      FocusStore.state.currentSession.restDurationMs = newRestDuration
       // 休息结束后自动继续专注（新段）
       await FocusStore.resumeFocus()
     }

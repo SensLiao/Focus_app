@@ -44,4 +44,5 @@ export interface FocusSessionUpdateDTO {
   breakCount?: number
   interruptionReason?: string
   timeLimitMs?: number          // 允许延长时限
+  restDurationMs?: number       // 累计休息时长
 }

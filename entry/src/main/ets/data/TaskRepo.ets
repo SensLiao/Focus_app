@@ -125,13 +125,14 @@ export class TaskRepo {
   }
 
   /**
-   * 查询所有未完成任务（不再使用completed_at区分）
+   * 查询所有未完成任务
    */
   static async findActive(context: Context): Promise<Result<Task[]>> {
     try {
       const store = await RdbClient.getStore(context)
       const predicates = new relationalStore.RdbPredicates('tasks')
-      // 查询所有任务，按创建时间倒序
+      // 仅查询未完成任务，按创建时间倒序
+      predicates.isNull('last_completed_at')
       predicates.orderByDesc('created_at')
 
       const resultSet = await store.query(predicates)

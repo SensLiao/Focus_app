@@ -69,6 +69,9 @@ export class SessionRepo {
       if (dto.timeLimitMs !== undefined) {
         valueBucket.time_limit_ms = dto.timeLimitMs
       }
+      if (dto.restDurationMs !== undefined) {
+        valueBucket.rest_duration_ms = dto.restDurationMs
+      }
 
       const predicates = new relationalStore.RdbPredicates('focus_sessions')
       predicates.equalTo('id', id)
