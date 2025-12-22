@@ -35,12 +35,17 @@ export class FocusState {
 export class FocusStore {
   private static state: FocusState = new FocusState()
   private static context: Context | null = null
+  private static storageTaskKey: string = 'focusCurrentTaskId'
+  private static storageBreakKey: string = 'focusIsBreaking'
 
   /**
    * 初始化 Store
    */
   static init(context: Context): void {
     FocusStore.context = context
+    AppStorage.SetOrCreate(FocusStore.storageTaskKey, FocusStore.state.currentTaskId ?? -1)
+    AppStorage.SetOrCreate(FocusStore.storageBreakKey, FocusStore.state.isBreaking)
+    FocusStore.syncAppStorage()
     Logger.info('FocusStore initialized')
   }
 
@@ -49,6 +54,11 @@ export class FocusStore {
    */
   static getState(): FocusState {
     return FocusStore.state
+  }
+
+  private static syncAppStorage(): void {
+    AppStorage.Set(FocusStore.storageTaskKey, FocusStore.state.currentTaskId ?? -1)
+    AppStorage.Set(FocusStore.storageBreakKey, FocusStore.state.isBreaking)
   }
   /**
    * 开始专注（新会话）
@@ -136,6 +146,7 @@ export class FocusStore {
     FocusStore.state.currentTaskId = taskId ?? null
     FocusStore.state.elapsedTime = 0
     FocusStore.state.remainingTime = timeLimitMs ?? 0
+    FocusStore.syncAppStorage()
 
     // 启动计时器（倒计时模式或普通模式）
     TimerService.start((elapsedMs) => {
@@ -401,6 +412,7 @@ export class FocusStore {
     FocusStore.state.breakStartAt = now
     FocusStore.state.breakDuration = durationMs
     FocusStore.state.breakElapsedTime = 0
+    FocusStore.syncAppStorage()
 
     // 创建休息结束提醒
     const reminderResult = await ReminderService.createBreakEndReminder(durationMs)
@@ -445,7 +457,9 @@ export class FocusStore {
     FocusStore.state.isBreaking = false
     FocusStore.state.breakStartAt = null
     FocusStore.state.breakElapsedTime = 0
+    FocusStore.syncAppStorage()
     FocusStore.state.currentBreakId = null
+    FocusStore.syncAppStorage()
 
     // 休息结束后再累计休息次数
     if (FocusStore.state.currentSession) {
@@ -547,6 +561,7 @@ export class FocusStore {
     FocusStore.state.currentTaskId = session.taskId ?? null
     FocusStore.state.elapsedTime = session.actualFocusDuration
     FocusStore.state.isBreaking = false
+    FocusStore.syncAppStorage()
 
     // 如果是倒计时模式，计算剩余时间
     if (session.timeLimitMs && session.timeLimitMs > 0) {
@@ -607,6 +622,7 @@ export class FocusStore {
     FocusStore.state.returnReminderId = -1
     FocusStore.state.breakReminderId = -1
     FocusStore.state.remainingTime = 0
+    FocusStore.syncAppStorage()
   }
 
   /**
