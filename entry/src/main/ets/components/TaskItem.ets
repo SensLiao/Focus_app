@@ -1,26 +1,24 @@
 /**
- * 任务列表项组件 - 基于 Figma Design
+ * Task list item
  */
-
 import { Task } from '../model/Task'
 import { Theme } from '../common/theme'
 
 @Component
 export struct TaskItem {
   @Prop task: Task
+  @Prop isResting: boolean = false
   onTap?: (task: Task) => void
   onStart?: (task: Task) => void
-  onResume?: (task: Task) => void  // 新增：恢复活动会话
+  onResume?: (task: Task) => void
   onDelete?: (task: Task) => void
 
-  // 判断是否为活动任务
   private isActiveTask(): boolean {
     return this.task.activeSessionId !== undefined && this.task.activeSessionId !== null
   }
 
   build() {
     Row() {
-      // 任务信息
       Column() {
         Text(this.task.title)
           .fontSize(Theme.FONT_SIZE_MEDIUM)
@@ -38,14 +36,13 @@ export struct TaskItem {
             .margin({ top: Theme.SPACE_TINY })
         }
 
-        // 专注时长和会话计数标签
         Row({ space: Theme.SPACE_SMALL }) {
           if (this.task.totalFocusTime > 0) {
             Text(this.formatDuration(this.task.totalFocusTime))
               .fontSize(Theme.FONT_SIZE_TINY)
               .fontColor(Theme.COLOR_PRIMARY)
-              .padding({ 
-                left: Theme.SPACE_SMALL, 
+              .padding({
+                left: Theme.SPACE_SMALL,
                 right: Theme.SPACE_SMALL,
                 top: Theme.SPACE_TINY,
                 bottom: Theme.SPACE_TINY
@@ -53,13 +50,13 @@ export struct TaskItem {
               .backgroundColor('#EFF6FF')
               .borderRadius(Theme.BORDER_RADIUS_SMALL)
           }
-          
+
           if (this.task.sessionCount > 0) {
             Text(`${this.task.sessionCount} sessions`)
               .fontSize(Theme.FONT_SIZE_TINY)
               .fontColor(Theme.COLOR_TEXT_SECONDARY)
-              .padding({ 
-                left: Theme.SPACE_SMALL, 
+              .padding({
+                left: Theme.SPACE_SMALL,
                 right: Theme.SPACE_SMALL,
                 top: Theme.SPACE_TINY,
                 bottom: Theme.SPACE_TINY
@@ -73,20 +70,18 @@ export struct TaskItem {
       .alignItems(HorizontalAlign.Start)
       .layoutWeight(1)
 
-      // 根据是否活动任务显示不同按钮
       if (this.isActiveTask()) {
-        // 活动任务：显示紫色咖啡图标
         Button({ type: ButtonType.Circle }) {
-          Text('☕')
+          Text(this.isResting ? '☕' : '▶')
             .fontSize(24)
         }
         .width(50)
         .height(50)
-        .backgroundColor('#B37FEB')  // 渐变紫
+        .backgroundColor(this.isResting ? '#B37FEB' : '#52C41A')
         .borderRadius(25)
         .shadow({
           radius: 12,
-          color: '#B37FEB33',
+          color: this.isResting ? '#B37FEB33' : '#52C41A33',
           offsetX: 0,
           offsetY: 4
         })
@@ -95,15 +90,13 @@ export struct TaskItem {
             this.onResume(this.task)
           }
         })
-        // 添加脉动动画提示
         .animation({
           duration: 1500,
           curve: Curve.EaseInOut,
-          iterations: -1,  // 无限循环
+          iterations: -1,
           playMode: PlayMode.Alternate
         })
       } else {
-        // 普通任务：显示绿色开始按钮
         Button('Start')
           .fontSize(Theme.FONT_SIZE_SMALL)
           .height(40)
@@ -137,19 +130,18 @@ export struct TaskItem {
         this.onTap(this.task)
       }
     })
-    // 添加长按删除功能
     .gesture(
       LongPressGesture({ repeat: false })
         .onAction(() => {
           AlertDialog.show({
-            title: '删除任务',
-            message: `确定要删除任务"${this.task.title}"吗？`,
+            title: 'Delete task',
+            message: `Delete task "${this.task.title}"?`,
             primaryButton: {
-              value: '取消',
+              value: 'Cancel',
               action: () => {}
             },
             secondaryButton: {
-              value: '删除',
+              value: 'Delete',
               fontColor: Theme.COLOR_ERROR,
               action: () => {
                 if (this.onDelete) {
@@ -176,3 +168,4 @@ export struct TaskItem {
     }
   }
 }
+

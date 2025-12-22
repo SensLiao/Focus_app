@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Home page - adapted to sample_frontend layout & flow
  */
 import router from '@ohos.router'
@@ -16,6 +16,8 @@ import { SettingsService } from '../services/SettingsService'
 @Component
 struct Index {
   @State taskState: TaskState = TaskStore.getState()
+  @StorageLink('focusCurrentTaskId') storageCurrentTaskId: number = -1
+  @StorageLink('focusIsBreaking') storageIsBreaking: boolean = false
   @State showRecoverDialog: boolean = false
   @State recoveredSession: FocusSession | null = null
   @State recoveredTaskTitle: string = ''
@@ -39,7 +41,8 @@ struct Index {
       } else {
         this.recoveredTaskTitle = 'Anonymous focus'
       }
-      this.showRecoverDialog = true
+      //this.showRecoverDialog = true
+      // NOT USED 目前不需要在主页跳转的功能
     }
   }
 
@@ -77,7 +80,7 @@ struct Index {
           .justifyContent(FlexAlign.Center)
         } else if (this.taskState.tasks.length === 0) {
           Column({ space: Theme.SPACE_MEDIUM }) {
-            Text('📝')
+            Text('馃摑')
               .fontSize(48)
             Text('No tasks yet. Add your first task to get started!')
               .fontSize(Theme.FONT_SIZE_MEDIUM)
@@ -146,14 +149,14 @@ struct Index {
                           this.confirmDelete()
                         })
                     }
-                  } else if (task.activeSessionId !== undefined && task.activeSessionId !== null) {
+                  } else if (this.isActiveTask(task)) {
                     Button({ type: ButtonType.Circle }) {
-                      Text('☕')
+                      Text(this.isRestingTask(task) ? '☕' : '▶')
                         .fontSize(22)
                     }
                     .width(48)
                     .height(48)
-                    .backgroundColor('#F0E5FF')
+                    .backgroundColor(this.isRestingTask(task) ? '#F0E5FF' : '#E6FFFB')
                     .onClick(() => {
                       this.resumeActiveTask(task)
                     })
@@ -196,7 +199,7 @@ struct Index {
 
       Column({ space: 12 }) {
         Button({ type: ButtonType.Circle }) {
-          Text(this.isEditMode ? '✕' : '✎')
+          Text(this.isEditMode ? '✓' : '✎')
             .fontSize(22)
             .fontColor(Color.White)
         }
@@ -251,30 +254,30 @@ struct Index {
         .onClick(() => {})
 
       Column({ space: Theme.SPACE_LARGE }) {
-        Text('发现未完成的专注')
+        Text('Unfinished focus session found')
           .fontSize(Theme.FONT_SIZE_LARGE)
           .fontWeight(FontWeight.Bold)
           .fontColor(Theme.COLOR_TEXT_PRIMARY)
 
         Column({ space: Theme.SPACE_SMALL }) {
-          Text(`任务：${this.recoveredTaskTitle}`)
+          Text(`Task: ${this.recoveredTaskTitle}`)
             .fontSize(Theme.FONT_SIZE_MEDIUM)
             .fontColor(Theme.COLOR_TEXT_PRIMARY)
 
           if (this.recoveredSession) {
-            Text(`已专注：${this.formatDuration(this.recoveredSession.actualFocusDuration)}`)
+            Text(`Focus time: ${this.formatDuration(this.recoveredSession.actualFocusDuration)}`)
               .fontSize(Theme.FONT_SIZE_SMALL)
               .fontColor(Theme.COLOR_TEXT_SECONDARY)
           }
 
-          Text('上次会话已暂停，是否继续？')
+          Text('Last session was paused. Continue?')
             .fontSize(Theme.FONT_SIZE_SMALL)
             .fontColor(Theme.COLOR_TEXT_TERTIARY)
             .margin({ top: Theme.SPACE_SMALL })
         }
 
         Row({ space: Theme.SPACE_MEDIUM }) {
-          Button('放弃')
+          Button('Discard')
             .fontSize(Theme.FONT_SIZE_MEDIUM)
             .height(48)
             .layoutWeight(1)
@@ -288,7 +291,7 @@ struct Index {
               this.recoveredSession = null
             })
 
-          Button('继续专注')
+          Button('Continue')
             .fontSize(Theme.FONT_SIZE_MEDIUM)
             .height(48)
             .layoutWeight(1)
@@ -351,6 +354,14 @@ struct Index {
     })
   }
 
+  private isRestingTask(task: Task): boolean {
+    return this.storageIsBreaking && this.storageCurrentTaskId === task.id
+  }
+
+  private isActiveTask(task: Task): boolean {
+    return this.storageCurrentTaskId === task.id
+  }
+
   private async deleteTask(task: Task) {
     const result = await TaskStore.deleteTask(task.id)
     if (result.ok) {
@@ -395,3 +406,6 @@ struct Index {
     }
   }
 }
+
+
+

@@ -29,7 +29,7 @@ interface RouterParams {
 @Component
 struct FocusPage {
   @State focusState: FocusState = FocusStore.getState()
-  @State taskTitle: string = 'Focus Timer'
+  @State taskTitle: string = ''
   @State taskDescription: string = ''
   @State taskTotalFocusTime: number = 0
   @State completedFocusOffset: number = 0
@@ -42,6 +42,9 @@ struct FocusPage {
   @State neverShowPauseWarning: boolean = false
   @State showLeaveWarning: boolean = false
   @State showActiveTaskWarning: boolean = false
+  @State viewingOtherTask: boolean = false
+  @State showTaskLoadError: boolean = false
+  @State taskLoadErrorMessage: string = ''
   @State sessionDetails: SessionSummary[] = []
   @State sessionSheetVisible: boolean = false
   @State sessionSheetOffset: number = 380
@@ -52,6 +55,7 @@ struct FocusPage {
     TaskStore.init(getContext(this))
     FocusStore.init(getContext(this))
     await SettingsService.init(getContext(this))
+    await TaskStore.loadTasks()
 
     const params = router.getParams() as RouterParams
     this.pendingTaskId = params?.pendingTaskId ?? null
@@ -59,9 +63,21 @@ struct FocusPage {
 
     this.focusState = FocusStore.getState()
     if (this.focusState.currentSession) {
-      this.syncTaskMeta()
+      if (this.pendingTaskId !== null && this.pendingTaskId !== this.focusState.currentTaskId) {
+        if (!this.applyTaskMetaById(this.pendingTaskId)) {
+          return
+        }
+        await this.loadSessionDetails(this.pendingTaskId)
+        this.isIdle = true
+        this.viewingOtherTask = true
+        return
+      }
+      if (!this.syncTaskMeta()) {
+        return
+      }
       this.startTimer()
       await this.loadSessionDetails(this.focusState.currentTaskId ?? undefined)
+      this.viewingOtherTask = false
       return
     }
 
@@ -78,17 +94,24 @@ struct FocusPage {
     }
 
     if (this.pendingTaskId !== null) {
-      const task = TaskStore.findTask(this.pendingTaskId)
-      this.taskTitle = task?.title ?? 'Focus Timer'
-      this.taskDescription = task?.description ?? ''
-      this.taskTotalFocusTime = task?.totalFocusTime ?? 0
-      await this.loadSessionDetails(task?.id)
+      if (!this.applyTaskMetaById(this.pendingTaskId)) {
+        return
+      }
+      await this.loadSessionDetails(this.pendingTaskId)
     } else if (this.startAnonymous) {
       this.taskTitle = 'Anonymous'
       this.taskTotalFocusTime = 0
+    } else {
+      this.taskTitle = ''
+      this.taskDescription = ''
+      this.taskTotalFocusTime = 0
+      this.taskLoadErrorMessage = 'No task was provided for this page.'
+      this.showTaskLoadError = true
+      return
     }
 
     this.isIdle = true
+    this.viewingOtherTask = false
   }
 
   aboutToDisappear() {
@@ -108,18 +131,37 @@ struct FocusPage {
     this.isIdle = false
   }
 
-  private syncTaskMeta() {
+  private syncTaskMeta(): boolean {
     if (this.focusState.currentTaskId !== null) {
-      const task = TaskStore.findTask(this.focusState.currentTaskId)
-      if (task) {
-        this.taskTitle = task.title
-        this.taskDescription = task.description ?? ''
-        this.taskTotalFocusTime = task.totalFocusTime ?? 0
-      }
-    } else if (this.startAnonymous) {
+      return this.applyTaskMetaById(this.focusState.currentTaskId)
+    }
+    if (this.startAnonymous) {
       this.taskTitle = 'Anonymous'
       this.taskTotalFocusTime = 0
+      return true
     }
+    this.taskTitle = ''
+    this.taskDescription = ''
+    this.taskTotalFocusTime = 0
+    this.taskLoadErrorMessage = 'No task was provided for this page.'
+    this.showTaskLoadError = true
+    return false
+  }
+
+  private applyTaskMetaById(taskId: number): boolean {
+    const task = TaskStore.findTask(taskId)
+    if (task) {
+      this.taskTitle = task.title
+      this.taskDescription = task.description ?? ''
+      this.taskTotalFocusTime = task.totalFocusTime ?? 0
+      return true
+    }
+    this.taskTitle = ''
+    this.taskDescription = ''
+    this.taskTotalFocusTime = 0
+    this.taskLoadErrorMessage = 'Unable to load the selected task. Please return to the list and try again.'
+    this.showTaskLoadError = true
+    return false
   }
 
   private formatTime(ms: number): string {
@@ -141,8 +183,11 @@ struct FocusPage {
     const result = await FocusStore.startFocus(this.pendingTaskId ?? undefined, timeLimitMs, sessionType)
     if (result.ok) {
       this.focusState = FocusStore.getState()
-      this.syncTaskMeta()
+      if (!this.syncTaskMeta()) {
+        return
+      }
       this.startTimer()
+      this.viewingOtherTask = false
       await this.loadSessionDetails(this.focusState.currentTaskId ?? undefined)
       promptAction.showToast({ message: 'Focus started' })
     } else {
@@ -228,7 +273,7 @@ struct FocusPage {
   }
 
   private getElapsedMs(): number {
-    if (!this.focusState.currentSession) {
+    if (this.viewingOtherTask || !this.focusState.currentSession) {
       return 0
     }
     const base = this.focusState.currentSession.actualFocusDuration ?? 0
@@ -236,19 +281,31 @@ struct FocusPage {
   }
 
   private getRestCount(): number {
+    if (this.viewingOtherTask) {
+      return 0
+    }
     return this.focusState.currentSession?.breakCount ?? 0
   }
 
   private getTotalRestTime(): number {
-    const total = this.focusState.currentSession?.restDurationMs ?? 0
+    if (this.viewingOtherTask || !this.focusState.currentSession) {
+      return 0
+    }
+    const total = this.focusState.currentSession.restDurationMs ?? 0
     return this.focusState.isBreaking ? total + this.focusState.breakElapsedTime : total
   }
 
   private isRunning(): boolean {
+    if (this.viewingOtherTask) {
+      return false
+    }
     return this.focusState.currentSession?.status === SessionStatus.RUNNING
   }
 
   private getProgress(): number {
+    if (this.viewingOtherTask) {
+      return 0
+    }
     if (this.focusState.currentSession && this.focusState.currentSession.sessionType === SessionType.COUNTDOWN && this.focusState.currentSession.timeLimitMs) {
       return Math.min(this.getElapsedMs() / this.focusState.currentSession.timeLimitMs, 1)
     }
@@ -256,6 +313,9 @@ struct FocusPage {
   }
 
   private getDisplayTime(): string {
+    if (this.viewingOtherTask) {
+      return this.formatTime(0)
+    }
     if (this.focusState.isBreaking) {
       return this.formatTime(this.focusState.breakElapsedTime)
     }
@@ -370,7 +430,7 @@ struct FocusPage {
               }
 
               Column({ space: 8 }) {
-                Text(this.focusState.isBreaking ? 'Resting' : 'Focus time')
+                Text(this.viewingOtherTask ? 'Focus time' : (this.focusState.isBreaking ? 'Resting' : 'Focus time'))
                   .fontSize(15)
                   .fontColor('#6B7280')
                 Text(this.getDisplayTime())
@@ -578,6 +638,10 @@ struct FocusPage {
         this.ActiveTaskDialog()
       }
 
+      if (this.showTaskLoadError) {
+        this.TaskLoadErrorDialog()
+      }
+
       if (this.sessionSheetVisible) {
         this.SessionDetailsDialog()
       }
@@ -744,6 +808,50 @@ struct FocusPage {
         .borderRadius(16)
         .onClick(() => {
           this.showActiveTaskWarning = false
+        })
+    }
+    .width('85%')
+    .padding(20)
+    .backgroundColor(Color.White)
+    .borderRadius(16)
+    .shadow({ radius: 16, color: '#11182726', offsetX: 0, offsetY: 8 })
+    .position({ x: '7.5%', y: '35%' })
+  }
+
+  @Builder
+  TaskLoadErrorDialog() {
+    Column() {
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor('#00000060')
+        .onClick(() => {
+          this.showTaskLoadError = false
+        })
+    }
+    .width('100%')
+    .height('100%')
+    .position({ x: 0, y: 0 })
+
+    Column({ space: 12 }) {
+      Text('Task Load Error')
+        .fontSize(20)
+        .fontWeight(FontWeight.Bold)
+        .fontColor('#111827')
+
+      Text(this.taskLoadErrorMessage)
+        .fontSize(14)
+        .fontColor('#6B7280')
+
+      Button('OK')
+        .width('100%')
+        .height(48)
+        .backgroundColor('#2F54EB')
+        .fontColor(Color.White)
+        .borderRadius(16)
+        .onClick(() => {
+          this.showTaskLoadError = false
+          router.back()
         })
     }
     .width('85%')
