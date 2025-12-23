@@ -10,6 +10,7 @@ import { SessionType } from '../model/FocusSession'
 import { SessionRepo } from '../data/SessionRepo'
 import { BreakRepo } from '../data/BreakRepo'
 import { SettingsService } from '../services/SettingsService'
+import { AppLifecycleService } from '../services/AppLifecycleService'
 
 interface SessionSummary {
   id: number
@@ -49,7 +50,11 @@ struct FocusPage {
   @State sessionSheetVisible: boolean = false
   @State sessionSheetOffset: number = 380
   @State sessionSheetOpacity: number = 0
+  @State displayIsBreaking: boolean = false
+  @State isModeAnimating: boolean = false
   private timerInterval: number = -1
+  private lifecycleListener: ((event: 'foreground' | 'background' | 'destroy') => void) | null = null
+  private modeTransitionTimer: number = -1
 
   async aboutToAppear() {
     TaskStore.init(getContext(this))
@@ -62,6 +67,7 @@ struct FocusPage {
     this.startAnonymous = params?.startAnonymous === true
 
     this.focusState = FocusStore.getState()
+    this.displayIsBreaking = this.focusState.isBreaking
     if (this.focusState.currentSession) {
       if (this.pendingTaskId !== null && this.pendingTaskId !== this.focusState.currentTaskId) {
         if (!this.applyTaskMetaById(this.pendingTaskId)) {
@@ -112,9 +118,25 @@ struct FocusPage {
 
     this.isIdle = true
     this.viewingOtherTask = false
+
+    this.lifecycleListener = (event) => {
+      if (event === 'foreground') {
+        this.focusState = FocusStore.getState()
+        void this.loadSessionDetails(this.pendingTaskId ?? this.focusState.currentTaskId ?? undefined)
+      }
+    }
+    AppLifecycleService.register(this.lifecycleListener)
   }
 
   aboutToDisappear() {
+    if (this.lifecycleListener) {
+      AppLifecycleService.unregister(this.lifecycleListener)
+      this.lifecycleListener = null
+    }
+    if (this.modeTransitionTimer !== -1) {
+      clearTimeout(this.modeTransitionTimer)
+      this.modeTransitionTimer = -1
+    }
     if (this.timerInterval !== -1) {
       clearInterval(this.timerInterval)
       this.timerInterval = -1
@@ -126,7 +148,9 @@ struct FocusPage {
       clearInterval(this.timerInterval)
     }
     this.timerInterval = setInterval(() => {
-      this.focusState = FocusStore.getState()
+      const nextState = FocusStore.getState()
+      this.focusState = nextState
+      this.handleModeTransition(nextState.isBreaking)
     }, 1000)
     this.isIdle = false
   }
@@ -219,17 +243,8 @@ struct FocusPage {
     }
   }
 
-  private async onResume() {
-    const result = await FocusStore.resumeFocus()
-    if (result.ok) {
-      promptAction.showToast({ message: 'Resumed' })
-    } else {
-      promptAction.showToast({ message: result.message ?? 'Resume failed' })
-    }
-    this.focusState = FocusStore.getState()
-  }
-
   private async onStartBreak() {
+    this.handleModeTransition(true)
     const settings = SettingsService.getSettings()
     const duration = settings.defaultRestDuration * 60 * 1000
     const result = await FocusStore.startBreak(duration)
@@ -242,6 +257,7 @@ struct FocusPage {
   }
 
   private async onFinishBreak() {
+    this.handleModeTransition(false)
     const result = await FocusStore.finishBreak()
     if (result.ok) {
       promptAction.showToast({ message: 'Break finished' })
@@ -321,6 +337,35 @@ struct FocusPage {
     }
     const remaining = this.focusState.remainingTime > 0 ? this.focusState.remainingTime : this.getElapsedMs()
     return this.formatTime(remaining)
+  }
+
+  private getSecondaryFocusInfo(): string {
+    if (this.viewingOtherTask) {
+      return `Focus time: ${this.formatTime(0)}`
+    }
+    const session = this.focusState.currentSession
+    if (session && session.sessionType === SessionType.COUNTDOWN && session.timeLimitMs) {
+      return `Time left: ${this.formatTime(Math.max(this.focusState.remainingTime, 0))}`
+    }
+    return `Focus time: ${this.formatTime(this.getElapsedMs())}`
+  }
+
+  private handleModeTransition(nextIsBreaking: boolean) {
+    if (this.isModeAnimating) {
+      return
+    }
+    if (nextIsBreaking === this.displayIsBreaking) {
+      return
+    }
+    if (this.modeTransitionTimer !== -1) {
+      clearTimeout(this.modeTransitionTimer)
+    }
+    this.isModeAnimating = true
+    this.modeTransitionTimer = setTimeout(() => {
+      this.displayIsBreaking = nextIsBreaking
+      this.isModeAnimating = false
+      this.modeTransitionTimer = -1
+    }, 300)
   }
 
   private async loadSessionDetails(taskId?: number) {
@@ -430,16 +475,52 @@ struct FocusPage {
               }
 
               Column({ space: 8 }) {
-                Text(this.viewingOtherTask ? 'Focus time' : (this.focusState.isBreaking ? 'Resting' : 'Focus time'))
-                  .fontSize(15)
-                  .fontColor('#6B7280')
-                Text(this.getDisplayTime())
-                  .fontSize(64)
-                  .fontWeight(FontWeight.Bold)
-                  .fontColor('#111827')
-                Text(`Total focus: ${this.formatTime(this.completedFocusOffset + this.getElapsedMs())}`)
-                  .fontSize(12)
-                  .fontColor('#9CA3AF')
+                Column({ space: 6 }) {
+                  if (this.displayIsBreaking) {
+                    Column({ space: 6 }) {
+                      Text('Resting')
+                        .fontSize(15)
+                        .fontColor('#6B7280')
+                      Text(this.getDisplayTime())
+                        .fontSize(64)
+                        .fontWeight(FontWeight.Bold)
+                        .fontColor('#111827')
+                    }
+                  } else {
+                    Column({ space: 6 }) {
+                      Text(this.viewingOtherTask ? 'Focus time' : 'Focus time')
+                        .fontSize(15)
+                        .fontColor('#6B7280')
+                      Text(this.getDisplayTime())
+                        .fontSize(64)
+                        .fontWeight(FontWeight.Bold)
+                        .fontColor('#111827')
+                    }
+                  }
+                }
+                .opacity(this.isModeAnimating ? 0 : 1)
+                .animation({ duration: 300, curve: Curve.EaseInOut })
+
+                if (this.displayIsBreaking) {
+                  Column({ space: 2 }) {
+                    Text(this.getSecondaryFocusInfo())
+                      .fontSize(12)
+                      .fontColor('#9CA3AF')
+                    Text(`Total focus: ${this.formatTime(this.completedFocusOffset + this.getElapsedMs())}`)
+                      .fontSize(12)
+                      .fontColor('#9CA3AF')
+                  }
+                } else {
+                  Column({ space: 2 }) {
+                    Text('Placeholder')
+                      .fontSize(12)
+                      .fontColor('#9CA3AF')
+                      .opacity(0)
+                    Text(`Total focus: ${this.formatTime(this.completedFocusOffset + this.getElapsedMs())}`)
+                      .fontSize(12)
+                      .fontColor('#9CA3AF')
+                  }
+                }
               }
             }
             .margin({ top: 24 })
@@ -530,7 +611,7 @@ struct FocusPage {
                 })
 
                 Button({ type: ButtonType.Circle }) {
-                  Text(this.isRunning() ? 'Pause' : 'Play')
+                  Text('Pause')
                     .fontSize(14)
                 }
                 .width(56)
@@ -539,8 +620,6 @@ struct FocusPage {
                 .onClick(() => {
                   if (this.isRunning()) {
                     this.onPause()
-                  } else {
-                    this.onResume()
                   }
                 })
 
@@ -945,9 +1024,9 @@ struct FocusPage {
     if (this.sessionSheetVisible) {
       return
     }
-    this.sessionSheetVisible = true
     this.sessionSheetOffset = 500
     this.sessionSheetOpacity = 0
+    this.sessionSheetVisible = true
     setTimeout(() => {
       this.sessionSheetOffset = 0
       this.sessionSheetOpacity = 1
@@ -963,5 +1042,10 @@ struct FocusPage {
     setTimeout(() => {
       this.sessionSheetVisible = false
     }, 260)
+  }
+
+  onBackPress(): boolean {
+    this.goBack()
+    return true
   }
 }

@@ -3,7 +3,10 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 import { AppLifecycleService } from '../services/AppLifecycleService';
 import { FocusStore } from '../store/focusStore';
+import { SessionStatus } from '../model/SessionStatus';
 import { Logger } from '../common/logger';
+import { NotificationService } from '../services/NotificationService';
+import { SettingsService } from '../services/SettingsService';
 
 const DOMAIN = 0x0000;
 
@@ -15,6 +18,8 @@ export default class EntryAbility extends UIAbility {
       hilog.error(DOMAIN, 'testTag', 'Failed to set colorMode. Cause: %{public}s', JSON.stringify(err));
     }
     Logger.info('Ability onCreate');
+    void SettingsService.init(this.context);
+    void NotificationService.init(this.context);
 
     // 注册生命周期监听
     AppLifecycleService.register((event) => {
@@ -28,6 +33,7 @@ export default class EntryAbility extends UIAbility {
 
   onDestroy(): void {
     Logger.info('Ability onDestroy');
+    void FocusStore.handleAppExit();
     AppLifecycleService.emit('destroy');
     AppLifecycleService.clear();
   }
@@ -54,11 +60,20 @@ export default class EntryAbility extends UIAbility {
     // Ability has brought to foreground
     Logger.info('Ability onForeground');
     AppLifecycleService.emit('foreground');
+    NotificationService.cancelBackgroundExit();
   }
 
   onBackground(): void {
     // Ability has back to background
     Logger.info('Ability onBackground');
     AppLifecycleService.emit('background');
+    const focusState = FocusStore.getState();
+    if (
+      SettingsService.isNotificationsEnabled()
+      && !focusState.isBreaking
+      && focusState.currentSession?.status === SessionStatus.RUNNING
+    ) {
+      NotificationService.publishBackgroundExit();
+    }
   }
 }

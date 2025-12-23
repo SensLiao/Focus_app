@@ -222,7 +222,11 @@ export class FocusStore {
     let actualDuration = session.actualFocusDuration
 
     if (session.status === SessionStatus.RUNNING && FocusStore.state.currentSegment) {
-      const elapsedMs = TimerService.stop()
+      let elapsedMs = TimerService.stop()
+      if (elapsedMs <= 0) {
+        const fallbackElapsed = now - FocusStore.state.currentSegment.startAt
+        elapsedMs = Math.max(fallbackElapsed, FocusStore.state.elapsedTime)
+      }
       await SegmentRepo.update(FocusStore.context, FocusStore.state.currentSegment.id, {
         endAt: now,
         durationMs: elapsedMs
@@ -490,16 +494,8 @@ export class FocusStore {
    */
   static async handleBackground(): Promise<void> {
     if (FocusStore.state.currentSession?.status === SessionStatus.RUNNING) {
-      // 暂停当前会话
-      await FocusStore.pauseFocus()
-
-      // 创建返回提醒
-      const result = await ReminderService.createReturnReminder()
-      if (result.ok) {
-        FocusStore.state.returnReminderId = result.data
-      }
-
-      Logger.info('Handled background event')
+      await FocusStore.endSessionByPause()
+      Logger.info('Handled background event: focus ended')
     }
   }
 
@@ -514,6 +510,66 @@ export class FocusStore {
     }
 
     Logger.info('Handled foreground event')
+  }
+
+  /**
+   * 处理应用退出事件
+   */
+  static async handleAppExit(): Promise<void> {
+    if (!FocusStore.context || !FocusStore.state.currentSession) {
+      return
+    }
+
+    if (FocusStore.state.isBreaking) {
+      await FocusStore.finalizeBreakOnExit()
+      await FocusStore.endSessionByPause()
+      Logger.info('Handled app exit during break')
+      return
+    }
+
+    await FocusStore.endSessionByPause()
+    Logger.info('Handled app exit with focus ended')
+  }
+
+  private static async finalizeBreakOnExit(): Promise<void> {
+    if (!FocusStore.context || !FocusStore.state.currentSession || !FocusStore.state.isBreaking) {
+      return
+    }
+
+    const now = Date.now()
+    const elapsedMs = TimerService.stop()
+    const breakId = FocusStore.state.currentBreakId
+
+    if (breakId !== null) {
+      await BreakRepo.update(FocusStore.context, breakId, {
+        endAt: now,
+        actualDuration: elapsedMs,
+        isSkipped: false,
+        reason: Constants.INTERRUPTION_APP_KILLED
+      })
+    }
+
+    const session = FocusStore.state.currentSession
+    const newBreakCount = (session.breakCount ?? 0) + 1
+    const newRestDuration = (session.restDurationMs ?? 0) + elapsedMs
+    await SessionRepo.update(FocusStore.context, session.id, {
+      breakCount: newBreakCount,
+      restDurationMs: newRestDuration
+    })
+
+    session.breakCount = newBreakCount
+    session.restDurationMs = newRestDuration
+
+    if (FocusStore.state.breakReminderId !== -1) {
+      await ReminderService.cancelReminder(FocusStore.state.breakReminderId)
+      FocusStore.state.breakReminderId = -1
+    }
+
+    FocusStore.state.isBreaking = false
+    FocusStore.state.breakStartAt = null
+    FocusStore.state.breakElapsedTime = 0
+    FocusStore.state.currentBreakId = null
+    FocusStore.syncAppStorage()
   }
 
   /**
