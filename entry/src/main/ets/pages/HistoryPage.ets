@@ -1,182 +1,177 @@
 /**
- * 历史页 - 已完成任务和专注记录（UI 现代化版本）
+ * History page - completed sessions with stats filter.
  */
 
-import router from '@ohos.router'
 import { TaskRepo } from '../data/TaskRepo'
-import { SessionRepo, SessionStats } from '../data/SessionRepo'
+import { SessionRepo } from '../data/SessionRepo'
+import { SegmentRepo } from '../data/SegmentRepo'
+import { BreakRepo } from '../data/BreakRepo'
 import { Task } from '../model/Task'
 import { FocusSession } from '../model/FocusSession'
+import { FocusSegment } from '../model/FocusSegment'
+import { BreakEvent } from '../model/BreakEvent'
 import { BottomNav } from '../components/BottomNav'
-import { StatCard } from '../components/StatCard'
 import { Theme } from '../common/theme'
 
 @Entry
 @Component
 struct HistoryPage {
-  @State completedTasks: Task[] = []
-  @State recentSessions: FocusSession[] = []
-  @State stats: SessionStats = {
-    totalFocusTime: 0,
-    sessionCount: 0,
-    totalBreaks: 0,
-    todayFocusTime: 0
-  }
+  @State completedSessions: FocusSession[] = []
+  @State taskById: Record<number, Task> = {}
+  @State expandedSessionIds: number[] = []
   @State loading: boolean = false
-  @State activeTab: number = 0 // 0: 任务, 1: 会话
+  @State filterOpen: boolean = false
+  @State selectedDate: Date = new Date()
+  @State pickerYear: string = new Date().getFullYear().toString()
+  @State pickerMonth: string = (new Date().getMonth() + 1).toString()
+  @State pickerDay: string = new Date().getDate().toString()
+  @State appliedDate: Date | null = null
+  @State hourlyFocus: number[] = []
+  @State hourlyRest: number[] = []
+  private readonly chartHeight: number = 180
+  private readonly chartMaxMinutes: number = 60
+  private readonly chartItemWidth: number = 30
+  private readonly chartBarWidth: number = 8
+  private readonly bottomNavHeight: number = 60
+  private chartScroller: Scroller = new Scroller()
 
   async aboutToAppear() {
+    this.resetHourlyData()
     await this.loadData()
   }
 
-  // 页面每次显示时刷新数据
   onPageShow() {
     this.loadData()
   }
 
   build() {
     Column() {
-      // 顶部标题区（渐变背景）
       Column() {
-        Row() {
-          Text('历史记录')
-            .fontSize(32)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(Color.White)
-        }
-        .width('100%')
-        .padding({ left: Theme.SPACE_LARGE, top: Theme.SPACE_XLARGE, bottom: Theme.SPACE_MEDIUM })
-
-        // 统计卡片（今日专注）
-        Column() {
-          Text('今日专注')
-            .fontSize(Theme.FONT_SIZE_SMALL)
-            .fontColor('#ffffffcc')
-          
-          Text(this.formatDurationLong(this.stats.todayFocusTime))
-            .fontSize(36)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(Color.White)
-            .margin({ top: Theme.SPACE_SMALL })
-        }
-        .width('100%')
-        .padding({ left: Theme.SPACE_LARGE, bottom: Theme.SPACE_LARGE })
+        Text('History')
+          .fontSize(28)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(Theme.COLOR_TEXT_PRIMARY)
       }
       .width('100%')
-      .linearGradient({
-        angle: 135,
-        colors: [
-          [Theme.COLOR_PRIMARY_LIGHT, 0],
-          [Theme.COLOR_PRIMARY, 1]
-        ]
-      })
+      .padding({ left: Theme.SPACE_LARGE, right: Theme.SPACE_LARGE, top: Theme.SPACE_LARGE, bottom: Theme.SPACE_SMALL })
 
-      // 统计卡片行
-      Row({ space: Theme.SPACE_SMALL }) {
-        Column() {
-          Text(this.formatDurationShort(this.stats.totalFocusTime))
-            .fontSize(Theme.FONT_SIZE_LARGE)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(Theme.COLOR_PRIMARY)
-          Text('总专注')
-            .fontSize(Theme.FONT_SIZE_TINY)
-            .fontColor(Theme.COLOR_TEXT_TERTIARY)
-        }
-        .layoutWeight(1)
-        .padding(Theme.SPACE_MEDIUM)
-        .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-        .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
-
-        Column() {
-          Text(this.stats.sessionCount.toString())
-            .fontSize(Theme.FONT_SIZE_LARGE)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(Theme.COLOR_SUCCESS)
-          Text('会话数')
-            .fontSize(Theme.FONT_SIZE_TINY)
-            .fontColor(Theme.COLOR_TEXT_TERTIARY)
-        }
-        .layoutWeight(1)
-        .padding(Theme.SPACE_MEDIUM)
-        .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-        .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
-
-        Column() {
-          Text(this.stats.totalBreaks.toString())
-            .fontSize(Theme.FONT_SIZE_LARGE)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(Theme.COLOR_WARNING)
-          Text('休息次数')
-            .fontSize(Theme.FONT_SIZE_TINY)
-            .fontColor(Theme.COLOR_TEXT_TERTIARY)
-        }
-        .layoutWeight(1)
-        .padding(Theme.SPACE_MEDIUM)
-        .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-        .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
-
-        Column() {
-          Text(this.completedTasks.length.toString())
-            .fontSize(Theme.FONT_SIZE_LARGE)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(Theme.COLOR_ERROR)
-          Text('已完成')
-            .fontSize(Theme.FONT_SIZE_TINY)
-            .fontColor(Theme.COLOR_TEXT_TERTIARY)
-        }
-        .layoutWeight(1)
-        .padding(Theme.SPACE_MEDIUM)
-        .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-        .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
-      }
-      .width('100%')
-      .padding({ left: Theme.SPACE_MEDIUM, right: Theme.SPACE_MEDIUM, top: Theme.SPACE_MEDIUM })
-
-      // Tab 切换
       Row() {
-        Button('已完成任务')
+        Text(this.appliedDate ? `Filtered: ${this.formatDateShort(this.appliedDate.getTime())}` : 'No filter')
+          .fontSize(Theme.FONT_SIZE_TINY)
+          .fontColor(Theme.COLOR_TEXT_TERTIARY)
+        Blank()
+        Button(this.filterOpen ? 'Hide Filter' : 'Filter')
           .fontSize(Theme.FONT_SIZE_SMALL)
-          .height(36)
-          .backgroundColor(this.activeTab === 0 ? Theme.COLOR_PRIMARY : Theme.COLOR_BACKGROUND)
-          .fontColor(this.activeTab === 0 ? Color.White : Theme.COLOR_TEXT_SECONDARY)
+          .height(32)
+          .backgroundColor(Theme.COLOR_PRIMARY)
+          .fontColor(Color.White)
           .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
-          .layoutWeight(1)
           .onClick(() => {
-            this.activeTab = 0
-          })
-
-        Button('专注记录')
-          .fontSize(Theme.FONT_SIZE_SMALL)
-          .height(36)
-          .backgroundColor(this.activeTab === 1 ? Theme.COLOR_PRIMARY : Theme.COLOR_BACKGROUND)
-          .fontColor(this.activeTab === 1 ? Color.White : Theme.COLOR_TEXT_SECONDARY)
-          .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
-          .layoutWeight(1)
-          .onClick(() => {
-            this.activeTab = 1
+            if (!this.filterOpen) {
+              const base = this.appliedDate ?? this.selectedDate
+              this.pickerYear = base.getFullYear().toString()
+              this.pickerMonth = (base.getMonth() + 1).toString()
+              this.pickerDay = base.getDate().toString()
+            }
+            this.filterOpen = !this.filterOpen
           })
       }
       .width('100%')
-      .padding({ left: Theme.SPACE_LARGE, right: Theme.SPACE_LARGE, top: Theme.SPACE_MEDIUM })
+      .padding({ left: Theme.SPACE_LARGE, right: Theme.SPACE_LARGE, bottom: Theme.SPACE_SMALL })
 
-      // 内容区
+      if (this.filterOpen) {
+        Column({ space: Theme.SPACE_SMALL }) {
+          Row({ space: Theme.SPACE_SMALL }) {
+            Column({ space: 6 }) {
+              Text('Year')
+                .fontSize(Theme.FONT_SIZE_TINY)
+                .fontColor(Theme.COLOR_TEXT_TERTIARY)
+              TextInput({ placeholder: 'YYYY', text: this.pickerYear })
+                .width('100%')
+                .height(40)
+                .borderRadius(8)
+                .backgroundColor(Color.White)
+                .border({ width: 1, color: Theme.COLOR_BORDER })
+                .padding({ left: 8, right: 8 })
+                .onChange((value: string) => {
+                  this.pickerYear = value.replace(/[^\d]/g, '')
+                })
+            }
+            .layoutWeight(1)
+
+            Column({ space: 6 }) {
+              Text('Month')
+                .fontSize(Theme.FONT_SIZE_TINY)
+                .fontColor(Theme.COLOR_TEXT_TERTIARY)
+              TextInput({ placeholder: 'MM', text: this.pickerMonth })
+                .width('100%')
+                .height(40)
+                .borderRadius(8)
+                .backgroundColor(Color.White)
+                .border({ width: 1, color: Theme.COLOR_BORDER })
+                .padding({ left: 8, right: 8 })
+                .onChange((value: string) => {
+                  this.pickerMonth = value.replace(/[^\d]/g, '')
+                })
+            }
+            .layoutWeight(1)
+
+            Column({ space: 6 }) {
+              Text('Day')
+                .fontSize(Theme.FONT_SIZE_TINY)
+                .fontColor(Theme.COLOR_TEXT_TERTIARY)
+              TextInput({ placeholder: 'DD', text: this.pickerDay })
+                .width('100%')
+                .height(40)
+                .borderRadius(8)
+                .backgroundColor(Color.White)
+                .border({ width: 1, color: Theme.COLOR_BORDER })
+                .padding({ left: 8, right: 8 })
+                .onChange((value: string) => {
+                  this.pickerDay = value.replace(/[^\d]/g, '')
+                })
+            }
+            .layoutWeight(1)
+          }
+
+          Row({ space: Theme.SPACE_SMALL }) {
+            Button('Apply Filter')
+              .layoutWeight(1)
+              .height(40)
+              .backgroundColor(Theme.COLOR_PRIMARY)
+              .fontColor(Color.White)
+              .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
+              .onClick(() => {
+                void this.applyFilter()
+              })
+
+            Button('Clear')
+              .layoutWeight(1)
+              .height(40)
+              .backgroundColor(Theme.COLOR_BACKGROUND)
+              .fontColor(Theme.COLOR_TEXT_SECONDARY)
+              .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
+              .onClick(() => {
+                this.clearFilter()
+              })
+          }
+        }
+        .width('100%')
+        .padding({ left: Theme.SPACE_LARGE, right: Theme.SPACE_LARGE, bottom: Theme.SPACE_SMALL })
+      }
+
       if (this.loading) {
         Column() {
-          Text('加载中...')
+          Text('Loading...')
             .fontSize(Theme.FONT_SIZE_MEDIUM)
             .fontColor(Theme.COLOR_TEXT_SECONDARY)
         }
         .layoutWeight(1)
         .justifyContent(FlexAlign.Center)
-      } else if (this.activeTab === 0) {
-        // 已完成任务列表
-        this.TaskListContent()
       } else {
-        // 专注记录列表
-        this.SessionListContent()
+        this.CompletedSessionsContent()
       }
 
-      // 底部导航栏
       BottomNav({ currentIndex: 1 })
     }
     .width('100%')
@@ -185,188 +180,244 @@ struct HistoryPage {
   }
 
   @Builder
-  TaskListContent() {
-    if (this.completedTasks.length === 0) {
-      Column({ space: Theme.SPACE_MEDIUM }) {
-        Text('📝')
-          .fontSize(48)
-        Text('还没有已完成的任务')
-          .fontSize(Theme.FONT_SIZE_MEDIUM)
-          .fontColor(Theme.COLOR_TEXT_TERTIARY)
+  CompletedSessionsContent() {
+    Column({ space: Theme.SPACE_MEDIUM }) {
+      if (this.appliedDate) {
+        this.HourlyChart()
       }
-      .layoutWeight(1)
-      .justifyContent(FlexAlign.Center)
-    } else {
-      List({ space: Theme.SPACE_MEDIUM }) {
-        ForEach(this.completedTasks, (task: Task) => {
-          ListItem() {
-            Column() {
-              Row() {
-                Column({ space: Theme.SPACE_TINY }) {
-                  Text(task.title)
-                    .fontSize(Theme.FONT_SIZE_MEDIUM)
-                    .fontWeight(FontWeight.Medium)
-                    .fontColor(Theme.COLOR_TEXT_PRIMARY)
-                    .maxLines(1)
-                    .textOverflow({ overflow: TextOverflow.Ellipsis })
-                  if (task.lastCompletedAt) {
-                    Text('完成于 ' + this.formatDate(task.lastCompletedAt))
-                      .fontSize(Theme.FONT_SIZE_TINY)
-                      .fontColor(Theme.COLOR_TEXT_TERTIARY)
-                  }
-                }
-                .layoutWeight(1)
-                .alignItems(HorizontalAlign.Start)
 
-                Column() {
-                  Text(this.formatDurationShort(task.totalFocusTime))
-                    .fontSize(Theme.FONT_SIZE_MEDIUM)
-                    .fontWeight(FontWeight.Bold)
-                    .fontColor(Theme.COLOR_PRIMARY)
-                }
-              }
-              .width('100%')
+      if (this.getVisibleSessions().length === 0) {
+        Column({ space: Theme.SPACE_MEDIUM }) {
+          Text('No completed tasks yet.')
+            .fontSize(Theme.FONT_SIZE_MEDIUM)
+            .fontColor(Theme.COLOR_TEXT_TERTIARY)
+        }
+        .justifyContent(FlexAlign.Center)
+        .layoutWeight(1)
+      } else {
+        List({ space: Theme.SPACE_MEDIUM }) {
+          ForEach(this.getVisibleSessions(), (session: FocusSession) => {
+            ListItem() {
+              this.SessionCard(session)
             }
-            .width('100%')
-            .padding(Theme.SPACE_MEDIUM)
-            .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-            .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
-            .shadow({
-              radius: Theme.SHADOW_SMALL.radius,
-              color: Theme.SHADOW_SMALL.color,
-              offsetX: 0,
-              offsetY: 2
-            })
-          }
-        }, (task: Task) => task.id.toString())
+          }, (session: FocusSession) => session.id.toString())
+        }
+        .width('100%')
       }
-      .width('100%')
-      .layoutWeight(1)
-      .padding({
-        left: Theme.SPACE_LARGE,
-        right: Theme.SPACE_LARGE,
-        top: Theme.SPACE_MEDIUM
-      })
     }
+    .layoutWeight(1)
+    .width('100%')
+    .padding({
+      left: Theme.SPACE_LARGE,
+      right: Theme.SPACE_LARGE,
+      top: Theme.SPACE_SMALL,
+      bottom: Theme.SPACE_MEDIUM + this.bottomNavHeight
+    })
   }
 
   @Builder
-  SessionListContent() {
-    if (this.recentSessions.length === 0) {
-      Column({ space: Theme.SPACE_MEDIUM }) {
-        Text('⏱')
-          .fontSize(48)
-        Text('还没有专注记录')
-          .fontSize(Theme.FONT_SIZE_MEDIUM)
-          .fontColor(Theme.COLOR_TEXT_TERTIARY)
+  HourlyChart() {
+    Column({ space: 8 }) {
+      Row({ space: 12 }) {
+        Row({ space: 6 }) {
+          Column()
+            .width(10)
+            .height(10)
+            .backgroundColor('#F59E0B')
+            .borderRadius(5)
+          Text('Rest')
+            .fontSize(Theme.FONT_SIZE_TINY)
+            .fontColor(Theme.COLOR_TEXT_SECONDARY)
+        }
+        Row({ space: 6 }) {
+          Column()
+            .width(10)
+            .height(10)
+            .backgroundColor(Theme.COLOR_PRIMARY)
+            .borderRadius(5)
+          Text('Focus')
+            .fontSize(Theme.FONT_SIZE_TINY)
+            .fontColor(Theme.COLOR_TEXT_SECONDARY)
+        }
       }
-      .layoutWeight(1)
-      .justifyContent(FlexAlign.Center)
-    } else {
-      List({ space: Theme.SPACE_MEDIUM }) {
-        ForEach(this.recentSessions, (session: FocusSession) => {
-          ListItem() {
-            Column({ space: Theme.SPACE_SMALL }) {
-              Row() {
-                Text(this.formatDate(session.startAt))
-                  .fontSize(Theme.FONT_SIZE_SMALL)
-                  .fontColor(Theme.COLOR_TEXT_SECONDARY)
 
-                Blank()
+      Row({ space: Theme.SPACE_SMALL }) {
+        Column() {
+          Text('min')
+            .fontSize(Theme.FONT_SIZE_TINY)
+            .fontColor(Theme.COLOR_TEXT_TERTIARY)
+            .margin({ bottom: 4 })
+          Column() {
+            Text('60')
+              .fontSize(Theme.FONT_SIZE_TINY)
+              .fontColor(Theme.COLOR_TEXT_TERTIARY)
+            Text('45')
+              .fontSize(Theme.FONT_SIZE_TINY)
+              .fontColor(Theme.COLOR_TEXT_TERTIARY)
+            Text('30')
+              .fontSize(Theme.FONT_SIZE_TINY)
+              .fontColor(Theme.COLOR_TEXT_TERTIARY)
+            Text('15')
+              .fontSize(Theme.FONT_SIZE_TINY)
+              .fontColor(Theme.COLOR_TEXT_TERTIARY)
+            Text('0')
+              .fontSize(Theme.FONT_SIZE_TINY)
+              .fontColor(Theme.COLOR_TEXT_TERTIARY)
+          }
+          .height(this.chartHeight)
+          .justifyContent(FlexAlign.SpaceBetween)
+        }
+        .width(28)
+        .height(this.chartHeight + 20)
 
-                Text(this.formatDurationShort(session.actualFocusDuration))
-                  .fontSize(Theme.FONT_SIZE_MEDIUM)
-                  .fontWeight(FontWeight.Bold)
-                  .fontColor(Theme.COLOR_PRIMARY)
-              }
-              .width('100%')
-
-              Row({ space: Theme.SPACE_SMALL }) {
-                // 会话类型标签
-                Text(this.getSessionTypeLabel(session.sessionType))
-                  .fontSize(Theme.FONT_SIZE_TINY)
-                  .fontColor(Color.White)
-                  .padding({ left: Theme.SPACE_SMALL, right: Theme.SPACE_SMALL, top: 2, bottom: 2 })
-                  .backgroundColor(Theme.COLOR_PRIMARY)
-                  .borderRadius(Theme.BORDER_RADIUS_SMALL)
-
-                // 休息次数
-                if (session.breakCount > 0) {
-                  Text('休息 ' + session.breakCount + ' 次')
-                    .fontSize(Theme.FONT_SIZE_TINY)
-                    .fontColor(Theme.COLOR_TEXT_TERTIARY)
+        Scroll(this.chartScroller) {
+          Row({ space: 12 }) {
+            ForEach(this.hourlyFocus, (value: number, index: number) => {
+              Column() {
+                Column({ space: 0 }) {
+                  Column()
+                    .width(this.chartBarWidth)
+                    .height(this.getStackRestHeight(index))
+                    .backgroundColor('#F59E0B')
+                    .borderRadius(6)
+                  Column()
+                    .width(this.chartBarWidth)
+                    .height(this.getStackFocusHeight(index))
+                    .backgroundColor(Theme.COLOR_PRIMARY)
+                    .borderRadius(6)
                 }
-              }
-
-              // 中断原因
-              if (session.interruptionReason && session.interruptionReason !== '') {
-                Text('中断原因: ' + session.interruptionReason)
+                .justifyContent(FlexAlign.End)
+                .alignItems(HorizontalAlign.Center)
+                .height(this.chartHeight)
+                .width(24)
+                Text(index.toString())
                   .fontSize(Theme.FONT_SIZE_TINY)
-                  .fontColor(Theme.COLOR_WARNING)
+                  .fontColor(Theme.COLOR_TEXT_SECONDARY)
+                  .margin({ top: 6 })
               }
-            }
-            .width('100%')
-            .padding(Theme.SPACE_MEDIUM)
-            .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-            .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
-            .shadow({
-              radius: Theme.SHADOW_SMALL.radius,
-              color: Theme.SHADOW_SMALL.color,
-              offsetX: 0,
-              offsetY: 2
+              .width(24)
+              .height(this.chartHeight + 20)
             })
           }
-        }, (session: FocusSession) => session.id.toString())
+          .height(this.chartHeight + 30)
+          .padding({ right: Theme.SPACE_LARGE })
+        }
+        .height(this.chartHeight + 30)
+        .layoutWeight(1)
+        .scrollable(ScrollDirection.Horizontal)
+        .scrollBar(BarState.On)
       }
       .width('100%')
-      .layoutWeight(1)
-      .padding({
-        left: Theme.SPACE_LARGE,
-        right: Theme.SPACE_LARGE,
-        top: Theme.SPACE_MEDIUM
-      })
+      .clip(true)
     }
+    .width('100%')
+    .padding(Theme.SPACE_MEDIUM)
+    .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+    .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
+  }
+
+  @Builder
+  SessionCard(session: FocusSession) {
+    Column({ space: Theme.SPACE_SMALL }) {
+      Row() {
+        Column({ space: 6 }) {
+          Text(this.getTaskTitle(session.taskId))
+            .fontSize(Theme.FONT_SIZE_MEDIUM)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(Theme.COLOR_TEXT_PRIMARY)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(`Completed: ${this.formatDate(this.getCompletionTime(session))}`)
+            .fontSize(Theme.FONT_SIZE_TINY)
+            .fontColor(Theme.COLOR_TEXT_TERTIARY)
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+
+        Text(this.formatDurationShort(session.actualFocusDuration))
+          .fontSize(Theme.FONT_SIZE_MEDIUM)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(Theme.COLOR_PRIMARY)
+
+        Text(this.isSessionExpanded(session.id) ? 'v' : '>')
+          .fontSize(16)
+          .fontColor(Theme.COLOR_TEXT_TERTIARY)
+          .margin({ left: 6 })
+      }
+      .width('100%')
+
+      if (this.isSessionExpanded(session.id)) {
+        Column({ space: 8 }) {
+          Row({ space: 12 }) {
+            Column() {
+              Text('Total duration')
+                .fontSize(Theme.FONT_SIZE_TINY)
+                .fontColor(Theme.COLOR_TEXT_TERTIARY)
+              Text(this.formatDurationShort(session.totalDuration))
+                .fontSize(Theme.FONT_SIZE_TINY)
+                .fontColor(Theme.COLOR_TEXT_SECONDARY)
+            }
+            .layoutWeight(1)
+            Column() {
+              Text('Total focus')
+                .fontSize(Theme.FONT_SIZE_TINY)
+                .fontColor(Theme.COLOR_TEXT_TERTIARY)
+              Text(this.formatDurationShort(session.actualFocusDuration))
+                .fontSize(Theme.FONT_SIZE_TINY)
+                .fontColor(Theme.COLOR_TEXT_SECONDARY)
+            }
+            .layoutWeight(1)
+          }
+
+          Row({ space: 12 }) {
+            Column() {
+              Text('Rest count')
+                .fontSize(Theme.FONT_SIZE_TINY)
+                .fontColor(Theme.COLOR_TEXT_TERTIARY)
+              Text(session.breakCount.toString())
+                .fontSize(Theme.FONT_SIZE_TINY)
+                .fontColor(Theme.COLOR_TEXT_SECONDARY)
+            }
+            .layoutWeight(1)
+            Column() {
+              Text('Total rest')
+                .fontSize(Theme.FONT_SIZE_TINY)
+                .fontColor(Theme.COLOR_TEXT_TERTIARY)
+              Text(this.formatDurationShort(this.getRestDuration(session)))
+                .fontSize(Theme.FONT_SIZE_TINY)
+                .fontColor(Theme.COLOR_TEXT_SECONDARY)
+            }
+            .layoutWeight(1)
+          }
+        }
+      }
+    }
+    .width('100%')
+    .padding(Theme.SPACE_MEDIUM)
+    .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+    .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
+    .shadow({
+      radius: Theme.SHADOW_SMALL.radius,
+      color: Theme.SHADOW_SMALL.color,
+      offsetX: 0,
+      offsetY: 2
+    })
+    .onClick(() => {
+      this.toggleExpanded(session.id)
+    })
   }
 
   private async loadData() {
     this.loading = true
-    // 并行加载数据
-    const results = await Promise.all([
-      TaskRepo.findCompleted(getContext(this)),
-      SessionRepo.findCompleted(getContext(this), 50),
-      SessionRepo.getStats(getContext(this))
-    ])
-    const tasksResult = results[0]
-    const sessionsResult = results[1]
-    const statsResult = results[2]
-
-    if (tasksResult.ok && tasksResult.data) {
-      this.completedTasks = tasksResult.data
-    }
-
+    const sessionsResult = await SessionRepo.findCompleted(getContext(this), 200)
     if (sessionsResult.ok && sessionsResult.data) {
-      this.recentSessions = sessionsResult.data
+      this.completedSessions = sessionsResult.data
+      await this.loadTaskMap(sessionsResult.data)
     }
-
-    if (statsResult.ok && statsResult.data) {
-      this.stats = statsResult.data
+    if (this.appliedDate) {
+      await this.loadHourlyDataForDate(this.appliedDate)
     }
-
     this.loading = false
-  }
-
-  private formatDurationLong(ms: number): string {
-    const seconds = Math.floor(ms / 1000)
-    const minutes = Math.floor(seconds / 60)
-    const hours = Math.floor(minutes / 60)
-    
-    if (hours > 0) {
-      return hours + '小时' + (minutes % 60) + '分钟'
-    } else if (minutes > 0) {
-      return minutes + '分钟'
-    } else {
-      return seconds + '秒'
-    }
   }
 
   private formatDurationShort(ms: number): string {
@@ -387,21 +438,251 @@ struct HistoryPage {
     const hour = date.getHours()
     const minute = date.getMinutes()
 
-    return month + '月' + day + '日 ' + this.pad(hour) + ':' + this.pad(minute)
+    return month + '/' + day + ' ' + this.pad(hour) + ':' + this.pad(minute)
   }
 
   private pad(num: number): string {
     return num < 10 ? '0' + num : num.toString()
   }
 
-  private getSessionTypeLabel(type: string): string {
-    switch (type) {
-      case 'COUNTDOWN':
-        return '倒计时'
-      case 'POMODORO':
-        return '番茄钟'
-      default:
-        return '正计时'
+  private formatDateShort(timestamp: number): string {
+    const date = new Date(timestamp)
+    const month = date.getMonth() + 1
+    const day = date.getDate()
+    return month + '/' + day
+  }
+
+  private getDateFromPicker(year: number, month: number, day: number): Date {
+    let monthIndex = month
+    if (monthIndex >= 1 && monthIndex <= 12) {
+      monthIndex -= 1
     }
+    if (monthIndex < 0) {
+      monthIndex = 0
+    }
+    if (monthIndex > 11) {
+      monthIndex = 11
+    }
+    const maxDay = new Date(year, monthIndex + 1, 0).getDate()
+    const safeDay = Math.min(Math.max(day, 1), maxDay)
+    return new Date(year, monthIndex, safeDay)
+  }
+
+  private toggleExpanded(sessionId: number) {
+    const index = this.expandedSessionIds.indexOf(sessionId)
+    if (index >= 0) {
+      this.expandedSessionIds.splice(index, 1)
+    } else {
+      this.expandedSessionIds.push(sessionId)
+    }
+    this.expandedSessionIds = [...this.expandedSessionIds]
+  }
+
+  private getTaskTitle(taskId?: number): string {
+    if (taskId === undefined) {
+      return 'Anonymous'
+    }
+    const task = this.taskById[taskId]
+    return task?.title ?? 'Unknown Task'
+  }
+
+  private getVisibleSessions(): FocusSession[] {
+    if (!this.appliedDate) {
+      return this.completedSessions
+    }
+    const start = new Date(this.appliedDate)
+    start.setHours(0, 0, 0, 0)
+    const end = new Date(start)
+    end.setDate(end.getDate() + 1)
+    const startMs = start.getTime()
+    const endMs = end.getTime()
+    return this.completedSessions.filter((session) => {
+      const ts = session.endAt ?? session.startAt
+      return ts >= startMs && ts < endMs
+    })
+  }
+
+  private async applyFilter(): Promise<void> {
+    const year = Number(this.pickerYear)
+    const month = Number(this.pickerMonth)
+    const day = Number(this.pickerDay)
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+      return
+    }
+    this.selectedDate = this.getDateFromPicker(year, month, day)
+    this.appliedDate = new Date(this.selectedDate)
+    await this.loadHourlyDataForDate(this.appliedDate)
+    this.filterOpen = false
+  }
+
+  private clearFilter() {
+    this.appliedDate = null
+    this.resetHourlyData()
+  }
+
+  private resetHourlyData() {
+    const focus: number[] = []
+    const rest: number[] = []
+    for (let i = 0; i < 24; i += 1) {
+      focus.push(0)
+      rest.push(0)
+    }
+    this.hourlyFocus = focus
+    this.hourlyRest = rest
+  }
+
+  private async loadHourlyDataForDate(date: Date) {
+    const start = new Date(date)
+    start.setHours(0, 0, 0, 0)
+    const end = new Date(start)
+    end.setDate(end.getDate() + 1)
+    const startMs = start.getTime()
+    const endMs = end.getTime()
+
+    const results = await Promise.all([
+      SegmentRepo.findByTimeRange(getContext(this), startMs, endMs),
+      BreakRepo.findByTimeRange(getContext(this), startMs, endMs)
+    ])
+    const segmentsResult = results[0]
+    const breaksResult = results[1]
+
+    const focus: number[] = []
+    const rest: number[] = []
+    for (let i = 0; i < 24; i += 1) {
+      focus.push(0)
+      rest.push(0)
+    }
+
+    if (segmentsResult.ok && segmentsResult.data) {
+      segmentsResult.data.forEach((segment: FocusSegment) => {
+        const segmentEnd = segment.endAt ?? (segment.startAt + segment.durationMs)
+        this.addDurationToHourly(focus, segment.startAt, segmentEnd, startMs, endMs)
+      })
+    }
+
+    if (breaksResult.ok && breaksResult.data) {
+      breaksResult.data.forEach((breakEvent: BreakEvent) => {
+        const breakEnd = breakEvent.endAt ?? (breakEvent.startAt + breakEvent.actualDuration)
+        this.addDurationToHourly(rest, breakEvent.startAt, breakEnd, startMs, endMs)
+      })
+    }
+
+    this.hourlyFocus = focus
+    this.hourlyRest = rest
+    this.scrollChartToFirstActiveHour()
+  }
+
+  private addDurationToHourly(
+    target: number[],
+    startMs: number,
+    endMs: number,
+    dayStart: number,
+    dayEnd: number
+  ) {
+    const clampedStart = Math.max(startMs, dayStart)
+    const clampedEnd = Math.min(endMs, dayEnd)
+    if (clampedEnd <= clampedStart) {
+      return
+    }
+
+    let cursor = clampedStart
+    while (cursor < clampedEnd) {
+      const hour = new Date(cursor).getHours()
+      const nextHour = this.getNextHourBoundary(cursor)
+      const segmentEnd = Math.min(clampedEnd, nextHour)
+      const minutes = (segmentEnd - cursor) / 60000
+      target[hour] += minutes
+      cursor = segmentEnd
+    }
+  }
+
+  private getNextHourBoundary(timeMs: number): number {
+    const dt = new Date(timeMs)
+    dt.setMinutes(60, 0, 0)
+    return dt.getTime()
+  }
+
+  private isSessionExpanded(sessionId: number): boolean {
+    return this.expandedSessionIds.includes(sessionId)
+  }
+
+  private getCompletionTime(session: FocusSession): number {
+    return session.endAt ?? session.startAt
+  }
+
+  private getRestDuration(session: FocusSession): number {
+    if (session.restDurationMs !== undefined) {
+      return session.restDurationMs
+    }
+    return Math.max(session.totalDuration - session.actualFocusDuration, 0)
+  }
+
+  private getBarHeight(value: number): number {
+    const height = (value / this.chartMaxMinutes) * this.chartHeight
+    return Math.min(height, this.chartHeight)
+  }
+
+  private getStackScale(index: number): number {
+    const focus = this.hourlyFocus[index] ?? 0
+    const rest = this.hourlyRest[index] ?? 0
+    const total = focus + rest
+    if (total <= this.chartMaxMinutes) {
+      return 1
+    }
+    return this.chartMaxMinutes / total
+  }
+
+  private getStackFocusHeight(index: number): number {
+    const focus = this.hourlyFocus[index] ?? 0
+    const scale = this.getStackScale(index)
+    return this.getBarHeight(focus * scale)
+  }
+
+  private getStackRestHeight(index: number): number {
+    const rest = this.hourlyRest[index] ?? 0
+    const scale = this.getStackScale(index)
+    return this.getBarHeight(rest * scale)
+  }
+
+  private async loadTaskMap(sessions: FocusSession[]) {
+    const ids: number[] = []
+    sessions.forEach((session) => {
+      if (session.taskId !== undefined && !ids.includes(session.taskId)) {
+        ids.push(session.taskId)
+      }
+    })
+    const taskMap: Record<number, Task> = {}
+    await Promise.all(ids.map(async (id) => {
+      const result = await TaskRepo.findById(getContext(this), id)
+      if (result.ok && result.data) {
+        taskMap[id] = result.data
+      }
+    }))
+    this.taskById = taskMap
+  }
+
+  private scrollChartToHour(hour: number) {
+    const offset = Math.max(0, hour * this.chartItemWidth)
+    this.chartScroller.scrollTo({
+      xOffset: offset,
+      yOffset: 0,
+      animation: false
+    })
+  }
+
+  private scrollChartToFirstActiveHour() {
+    let firstActive = -1
+    for (let i = 0; i < 24; i += 1) {
+      if ((this.hourlyFocus[i] ?? 0) > 0 || (this.hourlyRest[i] ?? 0) > 0) {
+        firstActive = i
+        break
+      }
+    }
+    if (firstActive === -1) {
+      this.scrollChartToHour(0)
+      return
+    }
+    const startHour = Math.max(0, firstActive - 2)
+    this.scrollChartToHour(startHour)
   }
 }
