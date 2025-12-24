@@ -12,6 +12,7 @@ import { BreakRepo } from '../data/BreakRepo'
 import { TaskRepo } from '../data/TaskRepo'
 import { TimerService } from '../services/TimerService'
 import { ReminderService } from '../services/ReminderService'
+import { NotificationService } from '../services/NotificationService'
 import { Result, success, fail } from '../model/Result'
 import { Logger } from '../common/logger'
 import { Constants } from '../common/constants'
@@ -27,6 +28,7 @@ export class FocusState {
   breakDuration: number = 0
   elapsedTime: number = 0
   breakElapsedTime: number = 0
+  breakIsOver: boolean = false
   returnReminderId: number = -1
   breakReminderId: number = -1
   remainingTime: number = 0 // 倒计时剩余时间（ms）
@@ -37,6 +39,7 @@ export class FocusStore {
   private static context: Context | null = null
   private static storageTaskKey: string = 'focusCurrentTaskId'
   private static storageBreakKey: string = 'focusIsBreaking'
+  private static storageBreakEndPromptKey: string = 'breakEndPromptPending'
 
   /**
    * 初始化 Store
@@ -45,6 +48,7 @@ export class FocusStore {
     FocusStore.context = context
     AppStorage.SetOrCreate(FocusStore.storageTaskKey, FocusStore.state.currentTaskId ?? -1)
     AppStorage.SetOrCreate(FocusStore.storageBreakKey, FocusStore.state.isBreaking)
+    AppStorage.SetOrCreate(FocusStore.storageBreakEndPromptKey, false)
     FocusStore.syncAppStorage()
     Logger.info('FocusStore initialized')
   }
@@ -416,6 +420,7 @@ export class FocusStore {
     FocusStore.state.breakStartAt = now
     FocusStore.state.breakDuration = durationMs
     FocusStore.state.breakElapsedTime = 0
+    FocusStore.state.breakIsOver = false
     FocusStore.syncAppStorage()
 
     // 创建休息结束提醒
@@ -426,10 +431,13 @@ export class FocusStore {
 
     // 启动休息计时器
     TimerService.start((elapsedMs) => {
-      FocusStore.state.breakElapsedTime = elapsedMs
-      // 自动结束休息
+      const cappedElapsed = Math.min(elapsedMs, durationMs)
+      FocusStore.state.breakElapsedTime = cappedElapsed
       if (elapsedMs >= durationMs) {
-        FocusStore.finishBreak()
+        TimerService.stop()
+        FocusStore.state.breakIsOver = true
+        AppStorage.Set(FocusStore.storageBreakEndPromptKey, true)
+        void NotificationService.publishBreakEnd()
       }
     })
 
@@ -461,6 +469,10 @@ export class FocusStore {
     FocusStore.state.isBreaking = false
     FocusStore.state.breakStartAt = null
     FocusStore.state.breakElapsedTime = 0
+    FocusStore.state.breakIsOver = false
+    AppStorage.Set(FocusStore.storageBreakEndPromptKey, false)
+    await NotificationService.cancelBreakEnd()
+    AppStorage.Set(FocusStore.storageBreakEndPromptKey, false)
     FocusStore.syncAppStorage()
     FocusStore.state.currentBreakId = null
     FocusStore.syncAppStorage()
@@ -564,10 +576,12 @@ export class FocusStore {
       await ReminderService.cancelReminder(FocusStore.state.breakReminderId)
       FocusStore.state.breakReminderId = -1
     }
+    await NotificationService.cancelBreakEnd()
 
     FocusStore.state.isBreaking = false
     FocusStore.state.breakStartAt = null
     FocusStore.state.breakElapsedTime = 0
+    FocusStore.state.breakIsOver = false
     FocusStore.state.currentBreakId = null
     FocusStore.syncAppStorage()
   }
@@ -675,6 +689,8 @@ export class FocusStore {
     FocusStore.state.breakStartAt = null
     FocusStore.state.elapsedTime = 0
     FocusStore.state.breakElapsedTime = 0
+    FocusStore.state.breakIsOver = false
+    AppStorage.Set(FocusStore.storageBreakEndPromptKey, false)
     FocusStore.state.returnReminderId = -1
     FocusStore.state.breakReminderId = -1
     FocusStore.state.remainingTime = 0
@@ -741,6 +757,7 @@ export class FocusStore {
     FocusStore.state.isBreaking = false
     FocusStore.state.breakStartAt = null
     FocusStore.state.breakElapsedTime = 0
+    FocusStore.state.breakIsOver = false
 
     Logger.info('Break skipped')
     return success(undefined)

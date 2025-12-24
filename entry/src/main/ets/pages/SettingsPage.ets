@@ -7,13 +7,65 @@ import { BottomNav } from '../components/BottomNav'
 import { Theme } from '../common/theme'
 import { SettingsService } from '../services/SettingsService'
 
-interface NumberSelectorParams {
-  value: number
-  min: number
-  max: number
-  step: number
-  unit: string
-  onChange: (val: number) => void
+@Component
+struct NumberSelector {
+  @Link value: number
+  @Prop min: number = 0
+  @Prop max: number = 0
+  @Prop step: number = 1
+  @Prop unit: string = ''
+  onChange?: (val: number) => void
+
+  private updateValue(next: number) {
+    this.value = next
+    if (this.onChange) {
+      this.onChange(next)
+    }
+  }
+
+  build() {
+    Row({ space: Theme.SPACE_TINY }) {
+      // 减少按钮
+      Button({ type: ButtonType.Circle }) {
+        Text('-')
+          .fontSize(Theme.FONT_SIZE_LARGE)
+          .fontColor(this.value <= this.min ? Theme.COLOR_TEXT_TERTIARY : Theme.COLOR_PRIMARY)
+      }
+      .width(36)
+      .height(36)
+      .backgroundColor(Theme.COLOR_BACKGROUND)
+      .enabled(this.value > this.min)
+      .onClick(() => {
+        if (this.value > this.min) {
+          this.updateValue(this.value - this.step)
+        }
+      })
+
+      // 数值显示
+      Text(`${this.value}`)
+        .fontSize(Theme.FONT_SIZE_LARGE)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(Theme.COLOR_TEXT_PRIMARY)
+        .width(48)
+        .textAlign(TextAlign.Center)
+
+      // 增加按钮
+      Button({ type: ButtonType.Circle }) {
+        Text('+')
+          .fontSize(Theme.FONT_SIZE_LARGE)
+          .fontColor(this.value >= this.max ? Theme.COLOR_TEXT_TERTIARY : Theme.COLOR_PRIMARY)
+      }
+      .width(36)
+      .height(36)
+      .backgroundColor(Theme.COLOR_BACKGROUND)
+      .enabled(this.value < this.max)
+      .onClick(() => {
+        if (this.value < this.max) {
+          this.updateValue(this.value + this.step)
+        }
+      })
+    }
+  }
 }
 
 @Entry
@@ -24,6 +76,9 @@ struct SettingsPage {
   @State restIntervalHours: number = 0
   @State restIntervalMinutes: number = 25
   @State focusDuration: number = 25
+  @State initialRestMinutes: number = 5
+  @State initialRestIntervalHours: number = 0
+  @State initialRestIntervalMinutes: number = 25
 
   async aboutToAppear() {
     // 初始化设置服务并加载设置
@@ -36,6 +91,9 @@ struct SettingsPage {
     const totalMinutes = settings.defaultRestInterval
     this.restIntervalHours = Math.floor(totalMinutes / 60)
     this.restIntervalMinutes = totalMinutes % 60
+    this.initialRestMinutes = this.restMinutes
+    this.initialRestIntervalHours = this.restIntervalHours
+    this.initialRestIntervalMinutes = this.restIntervalMinutes
   }
 
   build() {
@@ -101,17 +159,16 @@ struct SettingsPage {
                 .fontSize(Theme.FONT_SIZE_MEDIUM)
                 .fontColor(Theme.COLOR_TEXT_PRIMARY)
                 .layoutWeight(1)
-              this.NumberSelector({
-                value: this.focusDuration,
+              NumberSelector({
+                value: this.$focusDuration,
                 min: 5,
                 max: 120,
                 step: 5,
                 unit: '分钟',
                 onChange: async (val: number) => {
-                  this.focusDuration = val
                   await SettingsService.setDefaultFocusDuration(val)
                 }
-              } as NumberSelectorParams)
+              })
             }
             .width('100%')
 
@@ -123,17 +180,13 @@ struct SettingsPage {
                 .fontSize(Theme.FONT_SIZE_MEDIUM)
                 .fontColor(Theme.COLOR_TEXT_PRIMARY)
                 .layoutWeight(1)
-              this.NumberSelector({
-                value: this.restMinutes,
+              NumberSelector({
+                value: this.$restMinutes,
                 min: 1,
                 max: 30,
                 step: 1,
                 unit: '分钟',
-                onChange: async (val: number) => {
-                  this.restMinutes = val
-                  await SettingsService.setDefaultRestDuration(val)
-                }
-              } as NumberSelectorParams)
+              })
             }
             .width('100%')
 
@@ -153,36 +206,43 @@ struct SettingsPage {
 
               Row({ space: Theme.SPACE_MEDIUM }) {
                 // 小时选择
-                this.NumberSelector({
-                  value: this.restIntervalHours,
+                NumberSelector({
+                  value: this.$restIntervalHours,
                   min: 0,
                   max: 4,
                   step: 1,
                   unit: '小时',
-                  onChange: async (val: number) => {
-                    this.restIntervalHours = val
-                    await this.saveRestInterval()
-                  }
-                } as NumberSelectorParams)
+                })
 
                 Text(':')
                   .fontSize(Theme.FONT_SIZE_LARGE)
                   .fontColor(Theme.COLOR_TEXT_PRIMARY)
                 // 分钟选择
-                this.NumberSelector({
-                  value: this.restIntervalMinutes,
+                NumberSelector({
+                  value: this.$restIntervalMinutes,
                   min: 0,
                   max: 55,
                   step: 5,
                   unit: '分钟',
-                  onChange: async (val: number) => {
-                    this.restIntervalMinutes = val
-                    await this.saveRestInterval()
-                  }
-                } as NumberSelectorParams)
+                })
               }
               .width('100%')
               .justifyContent(FlexAlign.Start)
+
+              if (this.hasRestSettingsChanges()) {
+                Row() {
+                  Blank()
+                  Button('Save')
+                    .fontSize(Theme.FONT_SIZE_MEDIUM)
+                    .fontColor(Color.White)
+                    .backgroundColor(Theme.COLOR_PRIMARY)
+                    .borderRadius(Theme.BORDER_RADIUS_SMALL)
+                    .onClick(async () => {
+                      await this.saveRestSettings()
+                    })
+                }
+                .width('100%')
+              }
             }
           }
           .width('100%')
@@ -251,54 +311,19 @@ struct SettingsPage {
   }
 
   // 保存休息间隔设置
-  private async saveRestInterval() {
-    const totalMinutes = this.restIntervalHours * 60 + this.restIntervalMinutes
-    if (totalMinutes > 0) {
-      await SettingsService.setDefaultRestInterval(totalMinutes)
-    }
+  private hasRestSettingsChanges(): boolean {
+    return this.restMinutes !== this.initialRestMinutes
+      || this.restIntervalHours !== this.initialRestIntervalHours
+      || this.restIntervalMinutes !== this.initialRestIntervalMinutes
   }
-  @Builder
-  NumberSelector(params: NumberSelectorParams) {
-    Row({ space: Theme.SPACE_TINY }) {
-      // 减少按钮
-      Button({ type: ButtonType.Circle }) {
-        Text('-')
-          .fontSize(Theme.FONT_SIZE_LARGE)
-          .fontColor(params.value <= params.min ? Theme.COLOR_TEXT_TERTIARY : Theme.COLOR_PRIMARY)
-      }
-      .width(36)
-      .height(36)
-      .backgroundColor(Theme.COLOR_BACKGROUND)
-      .enabled(params.value > params.min)
-      .onClick(() => {
-        if (params.value > params.min) {
-          params.onChange(params.value - params.step)
-        }
-      })
 
-      // 数值显示
-      Text(`${params.value}`)
-        .fontSize(Theme.FONT_SIZE_LARGE)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(Theme.COLOR_TEXT_PRIMARY)
-        .width(48)
-        .textAlign(TextAlign.Center)
-
-      // 增加按钮
-      Button({ type: ButtonType.Circle }) {
-        Text('+')
-          .fontSize(Theme.FONT_SIZE_LARGE)
-          .fontColor(params.value >= params.max ? Theme.COLOR_TEXT_TERTIARY : Theme.COLOR_PRIMARY)
-      }
-      .width(36)
-      .height(36)
-      .backgroundColor(Theme.COLOR_BACKGROUND)
-      .enabled(params.value < params.max)
-      .onClick(() => {
-        if (params.value < params.max) {
-          params.onChange(params.value + params.step)
-        }
-      })
-    }
+  private async saveRestSettings() {
+    const totalMinutes = this.restIntervalHours * 60 + this.restIntervalMinutes
+    await SettingsService.setDefaultRestDuration(this.restMinutes)
+    await SettingsService.setDefaultRestInterval(totalMinutes)
+    this.initialRestMinutes = this.restMinutes
+    this.initialRestIntervalHours = this.restIntervalHours
+    this.initialRestIntervalMinutes = this.restIntervalMinutes
+    promptAction.showToast({ message: 'Settings saved' })
   }
 }

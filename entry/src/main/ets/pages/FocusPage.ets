@@ -3,6 +3,7 @@
  */
 import router from '@ohos.router'
 import promptAction from '@ohos.promptAction'
+import power from '@ohos.power'
 import { FocusStore, FocusState } from '../store/focusStore'
 import { TaskStore } from '../store/taskStore'
 import { SessionStatus } from '../model/SessionStatus'
@@ -11,6 +12,7 @@ import { SessionRepo } from '../data/SessionRepo'
 import { BreakRepo } from '../data/BreakRepo'
 import { SettingsService } from '../services/SettingsService'
 import { AppLifecycleService } from '../services/AppLifecycleService'
+import { NotificationService } from '../services/NotificationService'
 
 interface SessionSummary {
   id: number
@@ -52,7 +54,15 @@ struct FocusPage {
   @State sessionSheetOpacity: number = 0
   @State displayIsBreaking: boolean = false
   @State isModeAnimating: boolean = false
+  @State showStartRestPrompt: boolean = false
+  @State showBreakEndPrompt: boolean = false
+  @StorageLink('breakEndPromptPending') pendingBreakEndPrompt: boolean = false
+  @StorageLink('startRestPromptPending') pendingStartRestPrompt: boolean = false
+  @State restIntervalMs: number = 0
+  @State restDurationMs: number = 0
+  @State nextRestDueAtMs: number = 0
   private timerInterval: number = -1
+  private restPromptTimeoutId: number = -1
   private lifecycleListener: ((event: 'foreground' | 'background' | 'destroy') => void) | null = null
   private modeTransitionTimer: number = -1
 
@@ -60,6 +70,7 @@ struct FocusPage {
     TaskStore.init(getContext(this))
     FocusStore.init(getContext(this))
     await SettingsService.init(getContext(this))
+    this.loadRestSettings()
     await TaskStore.loadTasks()
 
     const params = router.getParams() as RouterParams
@@ -68,6 +79,9 @@ struct FocusPage {
 
     this.focusState = FocusStore.getState()
     this.displayIsBreaking = this.focusState.isBreaking
+    if (this.focusState.currentSession && this.nextRestDueAtMs === 0) {
+      this.resetNextRestCountdown()
+    }
     if (this.focusState.currentSession) {
       if (this.pendingTaskId !== null && this.pendingTaskId !== this.focusState.currentTaskId) {
         if (!this.applyTaskMetaById(this.pendingTaskId)) {
@@ -141,6 +155,10 @@ struct FocusPage {
       clearInterval(this.timerInterval)
       this.timerInterval = -1
     }
+    if (this.restPromptTimeoutId !== -1) {
+      clearTimeout(this.restPromptTimeoutId)
+      this.restPromptTimeoutId = -1
+    }
   }
 
   private startTimer() {
@@ -151,6 +169,8 @@ struct FocusPage {
       const nextState = FocusStore.getState()
       this.focusState = nextState
       this.handleModeTransition(nextState.isBreaking)
+      this.checkRestIntervalPrompt()
+      this.checkBreakEndPrompt()
     }, 1000)
     this.isIdle = false
   }
@@ -200,17 +220,123 @@ struct FocusPage {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`
   }
 
+  private loadRestSettings() {
+    const settings = SettingsService.getSettings()
+    this.restIntervalMs = Math.max(0, settings.defaultRestInterval) * 60 * 1000
+    this.restDurationMs = Math.max(0, settings.defaultRestDuration) * 60 * 1000
+  }
+
+  private resetNextRestCountdown() {
+    if (this.restIntervalMs > 0 && this.focusState.currentSession && !this.viewingOtherTask) {
+      this.nextRestDueAtMs = this.getElapsedMs() + this.restIntervalMs
+    } else {
+      this.nextRestDueAtMs = 0
+    }
+  }
+
+  private getNextRestRemainingMs(): number {
+    if (this.restIntervalMs <= 0 || this.nextRestDueAtMs <= 0) {
+      return 0
+    }
+    if (this.viewingOtherTask || !this.focusState.currentSession) {
+      return 0
+    }
+    const remaining = this.nextRestDueAtMs - this.getElapsedMs()
+    return Math.max(0, remaining)
+  }
+
+  private checkRestIntervalPrompt() {
+    if (this.pendingStartRestPrompt && !this.showStartRestPrompt) {
+      this.pendingStartRestPrompt = false
+      this.showStartRestPrompt = true
+      this.startRestPromptTimeout()
+      void NotificationService.cancelRestInterval()
+      return
+    }
+    if (this.showStartRestPrompt) {
+      return
+    }
+    if (!this.focusState.currentSession || this.viewingOtherTask) {
+      return
+    }
+    if (this.focusState.isBreaking || this.focusState.currentSession.status !== SessionStatus.RUNNING) {
+      return
+    }
+    if (this.restIntervalMs <= 0 || this.nextRestDueAtMs <= 0) {
+      return
+    }
+    if (this.getElapsedMs() >= this.nextRestDueAtMs) {
+      void this.handleRestIntervalReached()
+    }
+  }
+
+  private async handleRestIntervalReached() {
+    this.nextRestDueAtMs = 0
+    let screenOn = true
+    try {
+      screenOn = await power.isScreenOn()
+    } catch (error) {
+      screenOn = true
+    }
+    if (screenOn) {
+      this.showStartRestPrompt = true
+      this.startRestPromptTimeout()
+      await NotificationService.playRestIntervalSound()
+      return
+    }
+    this.pendingStartRestPrompt = true
+    await NotificationService.publishRestInterval()
+  }
+
+  private startRestPromptTimeout() {
+    if (this.restPromptTimeoutId !== -1) {
+      clearTimeout(this.restPromptTimeoutId)
+    }
+    this.restPromptTimeoutId = setTimeout(() => {
+      this.restPromptTimeoutId = -1
+      if (!this.showStartRestPrompt) {
+        return
+      }
+      this.showStartRestPrompt = false
+      this.pendingStartRestPrompt = false
+      void NotificationService.cancelRestInterval()
+      this.resetNextRestCountdown()
+    }, 20000)
+  }
+
+  private checkBreakEndPrompt() {
+    if (this.showBreakEndPrompt) {
+      return
+    }
+    if (this.pendingBreakEndPrompt) {
+      this.pendingBreakEndPrompt = false
+      this.showBreakEndPrompt = true
+      return
+    }
+    if (!this.focusState.isBreaking || !this.focusState.currentSession) {
+      return
+    }
+    if (!this.focusState.breakIsOver) {
+      return
+    }
+    this.pendingBreakEndPrompt = false
+    this.showBreakEndPrompt = true
+  }
+
   private async startSession() {
     const timeLimitMs = this.isCountdownMode ? this.countdownMinutes * 60 * 1000 : undefined
     const sessionType = this.isCountdownMode ? SessionType.COUNTDOWN : SessionType.NORMAL
-
-    const result = await FocusStore.startFocus(this.pendingTaskId ?? undefined, timeLimitMs, sessionType)
+    this.loadRestSettings()
+    const result = await FocusStore.startFocus(this.pendingTaskId ?? undefined, timeLimitMs, sessionType, this.restIntervalMs, undefined)
     if (result.ok) {
       this.focusState = FocusStore.getState()
       if (!this.syncTaskMeta()) {
         return
       }
       this.startTimer()
+      this.showBreakEndPrompt = false
+      this.showStartRestPrompt = false
+      this.resetNextRestCountdown()
       this.viewingOtherTask = false
       await this.loadSessionDetails(this.focusState.currentTaskId ?? undefined)
       promptAction.showToast({ message: 'Focus started' })
@@ -236,6 +362,15 @@ struct FocusPage {
     if (result.ok) {
       promptAction.showToast({ message: 'Paused and saved' })
       this.isIdle = true
+      this.showBreakEndPrompt = false
+      this.showStartRestPrompt = false
+      this.pendingStartRestPrompt = false
+      if (this.restPromptTimeoutId !== -1) {
+        clearTimeout(this.restPromptTimeoutId)
+        this.restPromptTimeoutId = -1
+      }
+      await NotificationService.cancelRestInterval()
+      this.nextRestDueAtMs = 0
       this.focusState = FocusStore.getState()
       await this.loadSessionDetails(this.pendingTaskId ?? this.focusState.currentTaskId ?? undefined)
     } else {
@@ -245,11 +380,21 @@ struct FocusPage {
 
   private async onStartBreak() {
     this.handleModeTransition(true)
-    const settings = SettingsService.getSettings()
-    const duration = settings.defaultRestDuration * 60 * 1000
+    if (this.restPromptTimeoutId !== -1) {
+      clearTimeout(this.restPromptTimeoutId)
+      this.restPromptTimeoutId = -1
+    }
+    this.showStartRestPrompt = false
+    this.pendingStartRestPrompt = false
+    await NotificationService.cancelRestInterval()
+    if (this.restDurationMs <= 0) {
+      this.loadRestSettings()
+    }
+    const duration = this.restDurationMs
     const result = await FocusStore.startBreak(duration)
     if (result.ok) {
       promptAction.showToast({ message: 'Break started' })
+      this.resetNextRestCountdown()
     } else {
       promptAction.showToast({ message: result.message ?? 'Break failed' })
     }
@@ -261,6 +406,8 @@ struct FocusPage {
     const result = await FocusStore.finishBreak()
     if (result.ok) {
       promptAction.showToast({ message: 'Break finished' })
+      this.showBreakEndPrompt = false
+      this.resetNextRestCountdown()
     } else {
       promptAction.showToast({ message: result.message ?? 'Finish break failed' })
     }
@@ -273,6 +420,15 @@ struct FocusPage {
       promptAction.showToast({ message: 'Focus completed' })
       router.back()
       this.isIdle = true
+      this.showBreakEndPrompt = false
+      this.showStartRestPrompt = false
+      this.pendingStartRestPrompt = false
+      if (this.restPromptTimeoutId !== -1) {
+        clearTimeout(this.restPromptTimeoutId)
+        this.restPromptTimeoutId = -1
+      }
+      await NotificationService.cancelRestInterval()
+      this.nextRestDueAtMs = 0
       await this.loadSessionDetails(this.pendingTaskId ?? this.focusState.currentTaskId ?? undefined)
     } else {
       promptAction.showToast({ message: result.message ?? 'Complete failed' })
@@ -333,7 +489,8 @@ struct FocusPage {
       return this.formatTime(0)
     }
     if (this.focusState.isBreaking) {
-      return this.formatTime(this.focusState.breakElapsedTime)
+      const remaining = Math.max(0, this.focusState.breakDuration - this.focusState.breakElapsedTime)
+      return this.formatTime(remaining)
     }
     const remaining = this.focusState.remainingTime > 0 ? this.focusState.remainingTime : this.getElapsedMs()
     return this.formatTime(remaining)
@@ -512,10 +669,16 @@ struct FocusPage {
                   }
                 } else {
                   Column({ space: 2 }) {
-                    Text('Placeholder')
-                      .fontSize(12)
-                      .fontColor('#9CA3AF')
-                      .opacity(0)
+                    if (this.restIntervalMs > 0 && !this.viewingOtherTask) {
+                      Text(`Next rest: ${this.formatTime(this.getNextRestRemainingMs())}`)
+                        .fontSize(12)
+                        .fontColor('#9CA3AF')
+                    } else {
+                      Text('Placeholder')
+                        .fontSize(12)
+                        .fontColor('#9CA3AF')
+                        .opacity(0)
+                    }
                     Text(`Total focus: ${this.formatTime(this.completedFocusOffset + this.getElapsedMs())}`)
                       .fontSize(12)
                       .fontColor('#9CA3AF')
@@ -709,6 +872,14 @@ struct FocusPage {
         this.PauseWarningDialog()
       }
 
+      if (this.showStartRestPrompt) {
+        this.StartRestDialog()
+      }
+
+      if (this.showBreakEndPrompt) {
+        this.BreakEndDialog()
+      }
+
       if (this.showLeaveWarning) {
         this.LeaveWarningDialog()
       }
@@ -727,6 +898,102 @@ struct FocusPage {
     }
     .width('100%')
     .height('100%')
+  }
+
+  @Builder
+  StartRestDialog() {
+    Column() {
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor('#00000060')
+    }
+    .width('100%')
+    .height('100%')
+    .position({ x: 0, y: 0 })
+
+    Column({ space: 12 }) {
+      Text('Rest time')
+        .fontSize(20)
+        .fontWeight(FontWeight.Bold)
+        .fontColor('#111827')
+
+      Text('Your rest interval is up. Start a rest or skip it.')
+        .fontSize(14)
+        .fontColor('#6B7280')
+
+      Row({ space: 12 }) {
+        Button('Skip Rest')
+          .layoutWeight(1)
+          .height(48)
+          .backgroundColor('#F3F4F6')
+          .fontColor('#4B5563')
+          .borderRadius(16)
+          .onClick(() => {
+            this.showStartRestPrompt = false
+            this.pendingStartRestPrompt = false
+            void NotificationService.cancelRestInterval()
+            this.resetNextRestCountdown()
+          })
+
+        Button('Start Rest')
+          .layoutWeight(1)
+          .height(48)
+          .backgroundColor('#2F54EB')
+          .fontColor(Color.White)
+          .borderRadius(16)
+          .onClick(async () => {
+            this.showStartRestPrompt = false
+            await this.onStartBreak()
+          })
+      }
+    }
+    .width('85%')
+    .padding(20)
+    .backgroundColor(Color.White)
+    .borderRadius(16)
+    .shadow({ radius: 16, color: '#11182726', offsetX: 0, offsetY: 8 })
+    .position({ x: '7.5%', y: '35%' })
+  }
+
+  @Builder
+  BreakEndDialog() {
+    Column() {
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor('#00000060')
+    }
+    .width('100%')
+    .height('100%')
+    .position({ x: 0, y: 0 })
+
+    Column({ space: 12 }) {
+      Text('Rest finished')
+        .fontSize(20)
+        .fontWeight(FontWeight.Bold)
+        .fontColor('#111827')
+
+      Text('Tap confirm to resume focus.')
+        .fontSize(14)
+        .fontColor('#6B7280')
+
+      Button('Confirm')
+        .width('100%')
+        .height(48)
+        .backgroundColor('#2F54EB')
+        .fontColor(Color.White)
+        .borderRadius(16)
+        .onClick(async () => {
+          await this.onFinishBreak()
+        })
+    }
+    .width('85%')
+    .padding(20)
+    .backgroundColor(Color.White)
+    .borderRadius(16)
+    .shadow({ radius: 16, color: '#11182726', offsetX: 0, offsetY: 8 })
+    .position({ x: '7.5%', y: '35%' })
   }
 
   @Builder
