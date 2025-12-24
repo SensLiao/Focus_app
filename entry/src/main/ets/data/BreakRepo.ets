@@ -103,6 +103,42 @@ export class BreakRepo {
   }
 
   /**
+   * 按时间范围查询休息事件（包含跨天事件）
+   */
+  static async findByTimeRange(
+    context: Context,
+    startAt: number,
+    endAt: number
+  ): Promise<Result<BreakEvent[]>> {
+    try {
+      const store = await RdbClient.getStore(context)
+      const predicates = new relationalStore.RdbPredicates('break_events')
+      predicates.lessThan('start_at', endAt)
+      predicates.and()
+      predicates.beginWrap()
+      predicates.isNull('end_at')
+      predicates.or()
+      predicates.greaterThanOrEqualTo('end_at', startAt)
+      predicates.endWrap()
+      predicates.orderByAsc('start_at')
+
+      const resultSet = await store.query(predicates)
+      const breaks: BreakEvent[] = []
+
+      while (resultSet.goToNextRow()) {
+        breaks.push(BreakRepo.rowToBreakEvent(resultSet))
+      }
+      resultSet.close()
+
+      Logger.info(`Found ${breaks.length} break events in range`)
+      return success(breaks)
+    } catch (error) {
+      Logger.error('Failed to find break events by time range', JSON.stringify(error))
+      return fail(Constants.ERROR_CODE_DB, '查询休息事件失败')
+    }
+  }
+
+  /**
    * 将 ResultSet 行转换为 BreakEvent 对象
    */
   private static rowToBreakEvent(resultSet: relationalStore.ResultSet): BreakEvent {

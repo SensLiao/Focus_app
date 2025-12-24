@@ -91,6 +91,42 @@ export class SegmentRepo {
   }
 
   /**
+   * 按时间范围查询专注段（包含跨天段）
+   */
+  static async findByTimeRange(
+    context: Context,
+    startAt: number,
+    endAt: number
+  ): Promise<Result<FocusSegment[]>> {
+    try {
+      const store = await RdbClient.getStore(context)
+      const predicates = new relationalStore.RdbPredicates('focus_segments')
+      predicates.lessThan('start_at', endAt)
+      predicates.and()
+      predicates.beginWrap()
+      predicates.isNull('end_at')
+      predicates.or()
+      predicates.greaterThanOrEqualTo('end_at', startAt)
+      predicates.endWrap()
+      predicates.orderByAsc('start_at')
+
+      const resultSet = await store.query(predicates)
+      const segments: FocusSegment[] = []
+
+      while (resultSet.goToNextRow()) {
+        segments.push(SegmentRepo.rowToSegment(resultSet))
+      }
+      resultSet.close()
+
+      Logger.info(`Found ${segments.length} segments in range`)
+      return success(segments)
+    } catch (error) {
+      Logger.error('Failed to find segments by time range', JSON.stringify(error))
+      return fail(Constants.ERROR_CODE_DB, '查询专注段失败')
+    }
+  }
+
+  /**
    * 查询会话的最后一个专注段
    */
   static async findLastBySessionId(context: Context, sessionId: number): Promise<Result<FocusSegment | null>> {
