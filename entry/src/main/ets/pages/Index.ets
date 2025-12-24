@@ -11,6 +11,8 @@ import { BottomNav } from '../components/BottomNav'
 import { Theme } from '../common/theme'
 import { Logger } from '../common/logger'
 import { SettingsService } from '../services/SettingsService'
+import { NotificationService } from '../services/NotificationService'
+import common from '@ohos.app.ability.common'
 
 @Entry
 @Component
@@ -18,16 +20,20 @@ struct Index {
   @State taskState: TaskState = TaskStore.getState()
   @StorageLink('focusCurrentTaskId') storageCurrentTaskId: number = -1
   @StorageLink('focusIsBreaking') storageIsBreaking: boolean = false
+  @StorageLink('breakEndPromptPending') pendingBreakEndPrompt: boolean = false
+  @StorageLink('startRestPromptPending') pendingStartRestPrompt: boolean = false
   @State showRecoverDialog: boolean = false
   @State recoveredSession: FocusSession | null = null
   @State recoveredTaskTitle: string = ''
   @State isEditMode: boolean = false
   @State deleteTarget: Task | null = null
+  @State showNotificationPermissionDialog: boolean = false
 
   async aboutToAppear() {
     TaskStore.init(getContext(this))
     FocusStore.init(getContext(this))
     await SettingsService.init(getContext(this))
+    await this.ensureNotificationPermission()
 
     await TaskStore.loadTasks()
     this.taskState = TaskStore.getState()
@@ -49,6 +55,15 @@ struct Index {
   async onPageShow() {
     await TaskStore.loadTasks()
     this.taskState = TaskStore.getState()
+    this.routeToBreakEndIfNeeded()
+    this.routeToStartRestIfNeeded()
+  }
+
+  private async ensureNotificationPermission() {
+    const enabled = await NotificationService.isEnabled()
+    if (!enabled) {
+      this.showNotificationPermissionDialog = true
+    }
   }
 
   build() {
@@ -80,7 +95,7 @@ struct Index {
           .justifyContent(FlexAlign.Center)
         } else if (this.taskState.tasks.length === 0) {
           Column({ space: Theme.SPACE_MEDIUM }) {
-            Text('馃摑')
+            Text('📝')
               .fontSize(48)
             Text('No tasks yet. Add your first task to get started!')
               .fontSize(Theme.FONT_SIZE_MEDIUM)
@@ -239,6 +254,10 @@ struct Index {
       if (this.showRecoverDialog) {
         this.RecoverDialog()
       }
+
+      if (this.showNotificationPermissionDialog) {
+        this.NotificationPermissionDialog()
+      }
     }
     .width('100%')
     .height('100%')
@@ -321,6 +340,66 @@ struct Index {
     }
   }
 
+  @Builder
+  NotificationPermissionDialog() {
+    Column() {
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor('#00000060')
+        .onClick(() => {})
+
+      Column({ space: Theme.SPACE_LARGE }) {
+        Text('Enable notifications')
+          .fontSize(Theme.FONT_SIZE_LARGE)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(Theme.COLOR_TEXT_PRIMARY)
+
+        Text('This app needs notification permission to alert you when rest timers end.')
+          .fontSize(Theme.FONT_SIZE_SMALL)
+          .fontColor(Theme.COLOR_TEXT_SECONDARY)
+
+        Row({ space: Theme.SPACE_MEDIUM }) {
+          Button('Cancel')
+            .fontSize(Theme.FONT_SIZE_MEDIUM)
+            .height(48)
+            .layoutWeight(1)
+            .backgroundColor(Theme.COLOR_TEXT_TERTIARY)
+            .borderRadius(Theme.BORDER_RADIUS_LARGE)
+            .onClick(() => {
+              const context = getContext(this) as common.UIAbilityContext
+              this.showNotificationPermissionDialog = false
+              context.terminateSelf()
+            })
+
+          Button('Set')
+            .fontSize(Theme.FONT_SIZE_MEDIUM)
+            .height(48)
+            .layoutWeight(1)
+            .backgroundColor(Theme.COLOR_PRIMARY)
+            .borderRadius(Theme.BORDER_RADIUS_LARGE)
+            .onClick(async () => {
+              const context = getContext(this) as common.UIAbilityContext
+              await NotificationService.requestEnable(context)
+              this.showNotificationPermissionDialog = false
+            })
+        }
+        .width('100%')
+      }
+      .width('85%')
+      .padding(Theme.SPACE_XLARGE)
+      .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+      .borderRadius(Theme.BORDER_RADIUS_LARGE)
+      .shadow({
+        radius: Theme.SHADOW_LARGE.radius,
+        color: Theme.SHADOW_LARGE.color,
+        offsetX: 0,
+        offsetY: 8
+      })
+      .position({ x: '7.5%', y: '35%' })
+    }
+  }
+
   private formatDuration(ms: number): string {
     const seconds = Math.floor(ms / 1000)
     const minutes = Math.floor(seconds / 60)
@@ -360,6 +439,28 @@ struct Index {
 
   private isActiveTask(task: Task): boolean {
     return this.storageCurrentTaskId === task.id
+  }
+
+  private routeToBreakEndIfNeeded() {
+    if (!this.pendingBreakEndPrompt) {
+      return
+    }
+    const focusState = FocusStore.getState()
+    if (!focusState.currentSession || !focusState.isBreaking) {
+      return
+    }
+    router.pushUrl({ url: 'pages/FocusPage' })
+  }
+
+  private routeToStartRestIfNeeded() {
+    if (!this.pendingStartRestPrompt) {
+      return
+    }
+    const focusState = FocusStore.getState()
+    if (!focusState.currentSession || focusState.isBreaking) {
+      return
+    }
+    router.pushUrl({ url: 'pages/FocusPage' })
   }
 
   private async deleteTask(task: Task) {
@@ -406,6 +507,3 @@ struct Index {
     }
   }
 }
-
-
-

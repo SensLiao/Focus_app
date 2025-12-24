@@ -1,6 +1,7 @@
 import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
+import power from '@ohos.power';
 import { AppLifecycleService } from '../services/AppLifecycleService';
 import { FocusStore } from '../store/focusStore';
 import { SessionStatus } from '../model/SessionStatus';
@@ -63,10 +64,20 @@ export default class EntryAbility extends UIAbility {
     NotificationService.cancelBackgroundExit();
   }
 
-  onBackground(): void {
+  async onBackground(): Promise<void> {
     // Ability has back to background
     Logger.info('Ability onBackground');
     AppLifecycleService.emit('background');
+    let screenOn = true;
+    try {
+      screenOn = await power.isScreenOn();
+    } catch (err) {
+      Logger.warn('Failed to read screen state. Falling back to background handling.');
+    }
+    if (!screenOn) {
+      Logger.info('Screen is off. Keep focus timer running.');
+      return;
+    }
     const focusState = FocusStore.getState();
     if (
       SettingsService.isNotificationsEnabled()
