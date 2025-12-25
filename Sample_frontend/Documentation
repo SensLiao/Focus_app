@@ -1,0 +1,221 @@
+Core Data Structures
+Task Interface:
+
+{
+  id: string;
+  name: string;
+  description: string;
+  createdAt: Date;
+  totalFocusTime: number; // cumulative across sessions
+  timerState?: { // persistent timer state
+    isRunning, isResting, seconds, restSeconds, 
+    restCount, focusSessions, countdown settings, etc.
+  }
+}
+CompletedTask Interface:
+
+Task + {
+  completedAt: Date;
+  duration: number; // final session duration
+}
+State Management (App.tsx)
+Global State:
+
+currentPage - Active page ('home' | 'start' | 'timer' | 'history' | 'settings')
+tasks - Array of active tasks in todo list
+completedTasks - Array of completed tasks (History)
+currentTask - Task being worked on in Timer
+editingTask - Task being edited in Start page
+State Flow Direction: App.tsx → Child Components (props) → User Actions → Callbacks → App.tsx (state updates)
+
+Page-by-Page Interaction Logic
+1. Home Page
+Purpose: Display todo list with task management
+
+User Interactions:
+
+Add Task (+) → onAddTask() → Navigate to Start page with editingTask=null
+Edit Mode Toggle → Shows edit/delete buttons on all tasks
+Edit Task → onEditTask(task) → Navigate to Start page with editingTask=task
+Delete Task → Shows confirmation modal → onDeleteTask(taskId) → Removes from tasks array
+Start Task (Play button) → onStartTask(task) → Sets currentTask → Navigate to Timer page
+Resume Active Task (Coffee icon) → Shown when task.timerState.isRunning === true → Navigate back to Timer page
+Display Logic:
+
+Tasks show accumulated totalFocusTime
+Active tasks (with running timer) show purple coffee icon instead of play button
+Empty state when no tasks exist
+
+2. Start Page
+Purpose: Create new task or edit existing task
+
+User Interactions:
+
+Create Mode (when editTask === null):
+Fill name + description → "Start Focus Session" → onCreateTask(name, desc) → Creates new task → Adds to tasks → Sets as currentTask → Navigate to Timer
+"Start without task" → onStartWithoutTask() → Creates anonymous task → Navigate to Timer
+Edit Mode (when editTask !== null):
+Modify name/description → "Save Changes" → onUpdateTask(id, name, desc) → Updates task in tasks array → Navigate to Home
+Back button → onBack() → Clears editingTask → Navigate to Home
+
+3. Timer Page (Most Complex)
+Purpose: Run focus/rest sessions with timer
+
+Timer State (Component-level):
+isRunning - Timer active/paused
+isResting - Focus mode vs rest mode
+seconds - Total elapsed time
+restSeconds - Total rest time accumulated
+restCount - Number of rest sessions taken
+currentRestTimer - Current rest session duration
+focusSessions - Array of completed focus sessions
+isCountdownMode - Normal (count up) vs countdown mode
+countdownSeconds - Remaining time in countdown mode
+State Persistence:
+
+Timer state is saved to task.timerState via onUpdateTaskState() callback
+State restored when returning to Timer page via useEffect on mount
+Allows pausing and resuming across navigation
+User Interactions:
+
+Start Focus Session:
+Creates first focus session entry with completedDate, focusDuration, restDuration
+Starts timer (isRunning = true)
+Active Task Warning: If another task already has isRunning=true, shows modal to:
+Cancel (stay with current task)
+Switch Task (pause current, start new)
+
+Pause:
+Shows warning modal first time (can check "Never show again")
+Stops timer (isRunning = false)
+Preserves all state, end current Focus session, store to session details. 
+
+Rest:
+Switches to rest mode (isResting = true)
+Starts rest countdown timer
+Can manually end rest → returns to focus mode
+
+Complete:
+Creates CompletedTask with final duration
+Adds to completedTasks array (History)
+Removes task from tasks array (Home Page todo-list)
+Navigate to Home
+
+Countdown Mode:
+Toggle switch above "Start Focus Session" button
+Allows setting duration (1-180 minutes, default 25)
+Timer counts DOWN instead of up
+Auto-stops at 0
+
+Leave Warning:
+Attempting to navigate away while isRunning=true shows modal
+Options: Stay, Pause & Leave, Complete & Leave
+Focus Session Detail Modal:
+
+Show Sessions detail: 
+Shows all completed sessions for the task
+Displays focus duration and rest duration per session
+Shows "In Progress" for current running session
+
+
+4. History Page
+Purpose: View completed tasks with statistics
+
+Data Display:
+
+List of completedTasks with completion date
+Expandable items show: total duration, total focus time, rest count, total rest time
+Each task can appear multiple times (one entry per completion)
+Statistic Board:
+
+Date Filter: Select date → Click "Apply Filter" → Filters tasks by completedAt date
+Hourly Distribution Chart:
+24-column bar chart (hours 0-23)
+Y-axis: 0-60 minutes scale
+Horizontally scrollable, defaults to 6am view
+Currently uses fake data (hours 12-14)
+Shows total focus time per hour for selected date
+Only visible when date filter applied
+User Interactions:
+
+Filter toggle (open/close filter panel)
+Date selection + Apply button
+Clear filter button
+Expand/collapse task details
+Horizontal scroll on chart
+5. Settings Page
+Purpose: User preferences (currently frontend-only, not persisted)
+
+Settings:
+
+Notifications Toggle: On/Off switch (not functional)
+Default Rest Duration: 0-30 minutes input
+Rest Interval: Hours (0-23) + Minutes (0-59) inputs
+Current State: Settings are local component state, not persisted or used elsewhere
+
+Navigation Flow
+Bottom Navigation (visible on Home/History/Settings):
+
+Direct navigation between main pages
+Hidden on Start/Timer pages
+Programmatic Navigation:
+
+Home → Start (Add/Edit) → Home
+Home → Timer (Start task) → Home (Complete)
+Timer → Leave Warning → Home/Stay
+Timer → Active Task Warning → Switch/Cancel
+Data Flow Patterns
+1. Task Creation Flow:
+
+Home (+) → Start → onCreateTask() 
+  → App.tsx creates Task 
+  → tasks array updated
+  → currentTask set
+  → Navigate to Timer
+2. Task Completion Flow:
+
+Timer (Complete) → onComplete(duration)
+  → App.tsx creates CompletedTask
+  → completedTasks array updated
+  → Remove from tasks array
+  → currentTask cleared
+  → Navigate to Home
+3. Timer State Persistence:
+
+TimerPage state changes
+  → useEffect triggers
+  → onUpdateTaskState(taskId, state)
+  → App.tsx updates task.timerState
+  → State preserved for resume
+4. Active Task Detection:
+
+Home page checks: task.timerState?.isRunning
+  → Shows coffee icon (purple) instead of play icon
+  → Clicking navigates to Timer with that task
+Key Frontend Features
+1. Multi-Session Support:
+
+Tasks remain in todo list after completion
+totalFocusTime accumulates across sessions
+Each completion creates new CompletedTask entry
+2. State Persistence:
+
+Timer state saved in task object
+Survive page navigation
+Can pause/resume indefinitely
+3. Concurrent Task Prevention:
+
+Active Task Warning prevents multiple running timers
+Only one task can have isRunning=true
+4. Leave Protection:
+
+Leave Warning prevents accidental navigation during active session
+Options to pause or complete before leaving
+5. Edit Mode:
+
+Toggle to reveal edit/delete controls
+Prevents accidental modifications
+6. Countdown Mode:
+
+Alternative timer behavior (count down vs up)
+Settings persisted in timer state
