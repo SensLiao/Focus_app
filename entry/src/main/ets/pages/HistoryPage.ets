@@ -7,11 +7,54 @@ import { SessionRepo } from '../data/SessionRepo'
 import { SegmentRepo } from '../data/SegmentRepo'
 import { BreakRepo } from '../data/BreakRepo'
 import { Task } from '../model/Task'
-import { FocusSession } from '../model/FocusSession'
+import { FocusSession, SessionType } from '../model/FocusSession'
 import { FocusSegment } from '../model/FocusSegment'
 import { BreakEvent } from '../model/BreakEvent'
+import { SessionStatus } from '../model/SessionStatus'
 import { BottomNav } from '../components/BottomNav'
 import { Theme } from '../common/theme'
+
+class FocusSessionCopy implements FocusSession {
+  id: number
+  taskId?: number
+  startAt: number
+  endAt?: number
+  status: SessionStatus
+  actualFocusDuration: number
+  totalDuration: number
+  breakCount: number
+  interruptionReason?: string
+  timeLimitMs?: number
+  sessionType: SessionType
+  restIntervalMs?: number
+  restDurationMs?: number
+
+  constructor(session: FocusSession) {
+    this.id = session.id
+    this.taskId = session.taskId
+    this.startAt = session.startAt
+    this.endAt = session.endAt
+    this.status = session.status
+    this.actualFocusDuration = session.actualFocusDuration
+    this.totalDuration = session.totalDuration
+    this.breakCount = session.breakCount
+    this.interruptionReason = session.interruptionReason
+    this.timeLimitMs = session.timeLimitMs
+    this.sessionType = session.sessionType
+    this.restIntervalMs = session.restIntervalMs
+    this.restDurationMs = session.restDurationMs
+  }
+}
+
+class GroupedSessionBucket {
+  session: FocusSession
+  restTotal: number
+
+  constructor(session: FocusSession, restTotal: number) {
+    this.session = session
+    this.restTotal = restTotal
+  }
+}
 
 @Entry
 @Component
@@ -363,15 +406,27 @@ struct HistoryPage {
     Column({ space: Theme.SPACE_SMALL }) {
       Row() {
         Column({ space: 6 }) {
-          Text(this.getTaskTitle(session.taskId))
-            .fontSize(Theme.FONT_SIZE_MEDIUM)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(Theme.COLOR_TEXT_PRIMARY)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Row({ space: 8 }) {
+            Text(this.getTaskTitle(session.taskId))
+              .fontSize(Theme.FONT_SIZE_MEDIUM)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(Theme.COLOR_TEXT_PRIMARY)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+            if (this.appliedDate && this.isTaskIncomplete(session.taskId)) {
+              Text('\u8fdb\u884c\u4e2d')
+                .fontSize(Theme.FONT_SIZE_TINY)
+                .fontColor(Theme.COLOR_TEXT_TERTIARY)
+                .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+                .borderRadius(10)
+                .backgroundColor(Theme.COLOR_BACKGROUND)
+            }
+          }
+          if (!(this.appliedDate && this.isTaskIncomplete(session.taskId))) {
           Text(`完成于: ${this.formatDate(this.getCompletionTime(session))}`)
-            .fontSize(Theme.FONT_SIZE_TINY)
-            .fontColor(Theme.COLOR_TEXT_TERTIARY)
+              .fontSize(Theme.FONT_SIZE_TINY)
+              .fontColor(Theme.COLOR_TEXT_TERTIARY)
+          }
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)
@@ -528,20 +583,91 @@ struct HistoryPage {
     return task?.title ?? 'Unknown Task'
   }
 
-  private getVisibleSessions(): FocusSession[] {
-    if (!this.appliedDate) {
-      return this.completedSessions
+  private isTaskIncomplete(taskId?: number): boolean {
+    if (taskId === undefined) {
+      return false
     }
-    const start = new Date(this.appliedDate)
+    const task = this.taskById[taskId]
+    if (!task) {
+      return true
+    }
+    return task.lastCompletedAt === undefined
+  }
+
+  private getVisibleSessions(): FocusSession[] {
+    const filtered = this.filterSessionsByDate(this.completedSessions, this.appliedDate)
+    return this.groupSessions(filtered, this.appliedDate !== null)
+  }
+
+  private filterSessionsByDate(sessions: FocusSession[], date: Date | null): FocusSession[] {
+    if (!date) {
+      return sessions
+    }
+    const start = new Date(date)
     start.setHours(0, 0, 0, 0)
     const end = new Date(start)
     end.setDate(end.getDate() + 1)
     const startMs = start.getTime()
     const endMs = end.getTime()
-    return this.completedSessions.filter((session) => {
+    return sessions.filter((session) => {
       const ts = session.endAt ?? session.startAt
       return ts >= startMs && ts < endMs
     })
+  }
+
+  private groupSessions(sessions: FocusSession[], groupByDay: boolean): FocusSession[] {
+    const grouped: Record<string, GroupedSessionBucket> = {}
+    const keys: string[] = []
+
+    sessions.forEach((session) => {
+      if (!groupByDay && this.isTaskIncomplete(session.taskId)) {
+        return
+      }
+      let key = ''
+      if (session.taskId !== undefined) {
+        key = `task:${session.taskId}`
+        if (groupByDay) {
+          key += `:${this.getDayKey(this.getCompletionTime(session))}`
+        }
+      } else {
+        key = `session:${session.id}`
+      }
+
+      if (!grouped[key]) {
+        const copy = new FocusSessionCopy(session)
+        copy.status = SessionStatus.FINISHED
+        grouped[key] = new GroupedSessionBucket(copy, this.getRestDuration(session))
+        keys.push(key)
+        return
+      }
+
+      const target = grouped[key]
+      const targetSession = target.session
+      targetSession.actualFocusDuration += session.actualFocusDuration
+      targetSession.totalDuration += session.totalDuration
+      targetSession.breakCount += session.breakCount
+      target.restTotal += this.getRestDuration(session)
+      targetSession.startAt = Math.min(targetSession.startAt, session.startAt)
+
+      const completion = this.getCompletionTime(session)
+      const targetCompletion = this.getCompletionTime(targetSession)
+      if (completion > targetCompletion) {
+        targetSession.endAt = session.endAt ?? completion
+      }
+    })
+
+    return keys.map((key) => {
+      const item = grouped[key]
+      item.session.restDurationMs = item.restTotal
+      return item.session
+    })
+  }
+
+  private getDayKey(timestamp: number): string {
+    const date = new Date(timestamp)
+    const month = this.pad(date.getMonth() + 1)
+    const day = this.pad(date.getDate())
+    return `${date.getFullYear()}-${month}-${day}`
   }
 
   private async applyFilter(): Promise<void> {

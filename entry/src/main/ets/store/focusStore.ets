@@ -29,6 +29,7 @@ export class FocusState {
   elapsedTime: number = 0
   breakElapsedTime: number = 0
   breakIsOver: boolean = false
+  breakAutoEnd: boolean = true
   returnReminderId: number = -1
   breakReminderId: number = -1
   remainingTime: number = 0 // 倒计时剩余时间（ms）
@@ -388,7 +389,7 @@ export class FocusStore {
   /**
    * 开始休息
    */
-  static async startBreak(durationMs: number, reason?: string): Promise<Result<void>> {
+  static async startBreak(durationMs: number, reason?: string, autoEnd: boolean = true): Promise<Result<void>> {
     if (!FocusStore.context || !FocusStore.state.currentSession) {
       return fail('NO_SESSION', '无进行中的会话')
     }
@@ -421,19 +422,21 @@ export class FocusStore {
     FocusStore.state.breakDuration = durationMs
     FocusStore.state.breakElapsedTime = 0
     FocusStore.state.breakIsOver = false
+    FocusStore.state.breakAutoEnd = autoEnd
     FocusStore.syncAppStorage()
 
-    // 创建休息结束提醒
-    const reminderResult = await ReminderService.createBreakEndReminder(durationMs)
-    if (reminderResult.ok) {
-      FocusStore.state.breakReminderId = reminderResult.data
+    // 创建休息结束提醒（自动结束模式）
+    if (autoEnd) {
+      const reminderResult = await ReminderService.createBreakEndReminder(durationMs)
+      if (reminderResult.ok) {
+        FocusStore.state.breakReminderId = reminderResult.data
+      }
     }
 
     // 启动休息计时器
     TimerService.start((elapsedMs) => {
-      const cappedElapsed = Math.min(elapsedMs, durationMs)
-      FocusStore.state.breakElapsedTime = cappedElapsed
-      if (elapsedMs >= durationMs) {
+      FocusStore.state.breakElapsedTime = autoEnd ? Math.min(elapsedMs, durationMs) : elapsedMs
+      if (autoEnd && elapsedMs >= durationMs) {
         TimerService.stop()
         FocusStore.state.breakIsOver = true
         AppStorage.Set(FocusStore.storageBreakEndPromptKey, true)
@@ -470,9 +473,9 @@ export class FocusStore {
     FocusStore.state.breakStartAt = null
     FocusStore.state.breakElapsedTime = 0
     FocusStore.state.breakIsOver = false
+    FocusStore.state.breakAutoEnd = true
     AppStorage.Set(FocusStore.storageBreakEndPromptKey, false)
     await NotificationService.cancelBreakEnd()
-    AppStorage.Set(FocusStore.storageBreakEndPromptKey, false)
     FocusStore.syncAppStorage()
     FocusStore.state.currentBreakId = null
     FocusStore.syncAppStorage()
@@ -582,6 +585,8 @@ export class FocusStore {
     FocusStore.state.breakStartAt = null
     FocusStore.state.breakElapsedTime = 0
     FocusStore.state.breakIsOver = false
+    FocusStore.state.breakAutoEnd = true
+    AppStorage.Set(FocusStore.storageBreakEndPromptKey, false)
     FocusStore.state.currentBreakId = null
     FocusStore.syncAppStorage()
   }
@@ -690,6 +695,7 @@ export class FocusStore {
     FocusStore.state.elapsedTime = 0
     FocusStore.state.breakElapsedTime = 0
     FocusStore.state.breakIsOver = false
+    FocusStore.state.breakAutoEnd = true
     AppStorage.Set(FocusStore.storageBreakEndPromptKey, false)
     FocusStore.state.returnReminderId = -1
     FocusStore.state.breakReminderId = -1
@@ -758,6 +764,9 @@ export class FocusStore {
     FocusStore.state.breakStartAt = null
     FocusStore.state.breakElapsedTime = 0
     FocusStore.state.breakIsOver = false
+    FocusStore.state.breakAutoEnd = true
+    AppStorage.Set(FocusStore.storageBreakEndPromptKey, false)
+    await NotificationService.cancelBreakEnd()
 
     Logger.info('Break skipped')
     return success(undefined)
