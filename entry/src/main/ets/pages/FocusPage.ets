@@ -59,6 +59,7 @@ struct FocusPage {
   @State showBreakEndPrompt: boolean = false
   @StorageLink('breakEndPromptPending') pendingBreakEndPrompt: boolean = false
   @StorageLink('startRestPromptPending') pendingStartRestPrompt: boolean = false
+  @State allowRest: boolean = true
   @State restIntervalMs: number = 0
   @State restDurationMs: number = 0
   @State nextRestDueAtMs: number = 0
@@ -223,6 +224,15 @@ struct FocusPage {
 
   private loadRestSettings() {
     const settings = SettingsService.getSettings()
+    this.allowRest = settings.restEnabled
+    if (!this.allowRest) {
+      this.restIntervalMs = 0
+      this.restDurationMs = 0
+      this.showStartRestPrompt = false
+      this.pendingStartRestPrompt = false
+      void NotificationService.cancelRestInterval()
+      return
+    }
     this.restIntervalMs = Math.max(0, settings.defaultRestInterval) * 60 * 1000
     this.restDurationMs = Math.max(0, settings.defaultRestDuration) * 60 * 1000
   }
@@ -247,6 +257,9 @@ struct FocusPage {
   }
 
   private checkRestIntervalPrompt() {
+    if (!this.allowRest) {
+      return
+    }
     if (this.pendingStartRestPrompt && !this.showStartRestPrompt) {
       this.pendingStartRestPrompt = false
       this.showStartRestPrompt = true
@@ -379,7 +392,7 @@ struct FocusPage {
     }
   }
 
-  private async onStartBreak() {
+  private async onStartBreak(autoEnd: boolean) {
     this.handleModeTransition(true)
     if (this.restPromptTimeoutId !== -1) {
       clearTimeout(this.restPromptTimeoutId)
@@ -392,7 +405,7 @@ struct FocusPage {
       this.loadRestSettings()
     }
     const duration = this.restDurationMs
-    const result = await FocusStore.startBreak(duration)
+    const result = await FocusStore.startBreak(duration, undefined, autoEnd)
     if (result.ok) {
       promptAction.showToast({ message: 'Break started' })
       this.resetNextRestCountdown()
@@ -490,8 +503,11 @@ struct FocusPage {
       return this.formatTime(0)
     }
     if (this.focusState.isBreaking) {
-      const remaining = Math.max(0, this.focusState.breakDuration - this.focusState.breakElapsedTime)
-      return this.formatTime(remaining)
+      if (this.focusState.breakAutoEnd) {
+        const remaining = Math.max(0, this.focusState.breakDuration - this.focusState.breakElapsedTime)
+        return this.formatTime(remaining)
+      }
+      return this.formatTime(this.focusState.breakElapsedTime)
     }
     const remaining = this.focusState.remainingTime > 0 ? this.focusState.remainingTime : this.getElapsedMs()
     return this.formatTime(remaining)
@@ -688,7 +704,7 @@ struct FocusPage {
                   }
                 } else {
                   Column({ space: 2 }) {
-                    if (this.restIntervalMs > 0 && !this.viewingOtherTask) {
+                    if (this.allowRest && this.restIntervalMs > 0 && !this.viewingOtherTask) {
                       Text(`下次休息: ${this.formatTime(this.getNextRestRemainingMs())}`)
                         .fontSize(12)
                         .fontColor(Theme.COLOR_TEXT_TERTIARY)
@@ -795,15 +811,17 @@ struct FocusPage {
             Column({ space: 16 }) {
               Row({ space: 12 }) {
                 // Rest 按钮
-                Button({ type: ButtonType.Circle }) {
-                  Text('☕').fontSize(20)
+                if (this.allowRest) {
+                  Button({ type: ButtonType.Circle }) {
+                    Text('☕').fontSize(20)
+                  }
+                  .width(52)
+                  .height(52)
+                  .backgroundColor(Theme.COLOR_BACKGROUND)
+                  .onClick(() => {
+                    void this.onStartBreak(false)
+                  })
                 }
-                .width(52)
-                .height(52)
-                .backgroundColor(Theme.COLOR_BACKGROUND)
-                .onClick(() => {
-                  this.onStartBreak()
-                })
 
                 // Pause 按钮
                 Button({ type: ButtonType.Circle }) {
@@ -838,42 +856,44 @@ struct FocusPage {
           }
 
           // 统计卡片 - Rest Count 和 Rest Time
-          Row() {
-            Row({ space: 8 }) {
-              Text('休息次数:')
-                .fontSize(14)
-                .fontColor(Theme.COLOR_TEXT_SECONDARY)
-              Text(this.getRestCount().toString())
-                .fontSize(14)
-                .fontWeight(FontWeight.Medium)
-                .fontColor(Theme.COLOR_TEXT_PRIMARY)
-            }
-            .layoutWeight(1)
-            .justifyContent(FlexAlign.Center)
+          if (this.allowRest) {
+            Row() {
+              Row({ space: 8 }) {
+                Text('休息次数:')
+                  .fontSize(14)
+                  .fontColor(Theme.COLOR_TEXT_SECONDARY)
+                Text(this.getRestCount().toString())
+                  .fontSize(14)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(Theme.COLOR_TEXT_PRIMARY)
+              }
+              .layoutWeight(1)
+              .justifyContent(FlexAlign.Center)
 
-            Divider()
-              .vertical(true)
-              .height(20)
-              .color(Theme.COLOR_BORDER)
+              Divider()
+                .vertical(true)
+                .height(20)
+                .color(Theme.COLOR_BORDER)
 
-            Row({ space: 8 }) {
-              Text('休息时长:')
-                .fontSize(14)
-                .fontColor(Theme.COLOR_TEXT_SECONDARY)
-              Text(this.formatTime(this.getTotalRestTime()))
-                .fontSize(14)
-                .fontWeight(FontWeight.Medium)
-                .fontColor(Theme.COLOR_TEXT_PRIMARY)
+              Row({ space: 8 }) {
+                Text('休息时长:')
+                  .fontSize(14)
+                  .fontColor(Theme.COLOR_TEXT_SECONDARY)
+                Text(this.formatTime(this.getTotalRestTime()))
+                  .fontSize(14)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(Theme.COLOR_TEXT_PRIMARY)
+              }
+              .layoutWeight(1)
+              .justifyContent(FlexAlign.Center)
             }
-            .layoutWeight(1)
-            .justifyContent(FlexAlign.Center)
+            .width('100%')
+            .padding({ left: 16, right: 16, top: 14, bottom: 14 })
+            .margin({ left: 16, right: 16 })
+            .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+            .borderRadius(14)
+            .shadow({ radius: 4, color: '#0000000A', offsetX: 0, offsetY: 2 })
           }
-          .width('100%')
-          .padding({ left: 16, right: 16, top: 14, bottom: 14 })
-          .margin({ left: 16, right: 16 })
-          .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-          .borderRadius(14)
-          .shadow({ radius: 4, color: '#0000000A', offsetX: 0, offsetY: 2 })
 
           // Focus Sessions 卡片
           Row({ space: 8 }) {
@@ -986,7 +1006,7 @@ struct FocusPage {
           .borderRadius(16)
           .onClick(async () => {
             this.showStartRestPrompt = false
-            await this.onStartBreak()
+            await this.onStartBreak(true)
           })
       }
     }

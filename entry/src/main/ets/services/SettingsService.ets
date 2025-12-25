@@ -9,6 +9,7 @@ import { Constants } from '../common/constants'
 
 export interface AppSettings {
   notificationsEnabled: boolean
+  restEnabled: boolean
   defaultRestDuration: number      // 默认休息时长（分钟）
   defaultRestInterval: number      // 默认休息间隔（分钟）
   defaultFocusDuration: number     // 默认专注时长（分钟，倒计时用）
@@ -17,6 +18,7 @@ export interface AppSettings {
 
 const DEFAULT_SETTINGS: AppSettings = {
   notificationsEnabled: true,
+  restEnabled: true,
   defaultRestDuration: 5,
   defaultRestInterval: 25,
   defaultFocusDuration: 25,
@@ -25,6 +27,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 const PREFERENCES_NAME = 'focus_app_settings'
 const KEY_NOTIFICATIONS = 'notifications_enabled'
+const KEY_REST_ENABLED = 'rest_enabled'
 const KEY_REST_DURATION = 'default_rest_duration'
 const KEY_REST_INTERVAL = 'default_rest_interval'
 const KEY_FOCUS_DURATION = 'default_focus_duration'
@@ -34,6 +37,7 @@ export class SettingsService {
   private static preferences: dataPreferences.Preferences | null = null
   private static settings: AppSettings = {
     notificationsEnabled: DEFAULT_SETTINGS.notificationsEnabled,
+    restEnabled: DEFAULT_SETTINGS.restEnabled,
     defaultRestDuration: DEFAULT_SETTINGS.defaultRestDuration,
     defaultRestInterval: DEFAULT_SETTINGS.defaultRestInterval,
     defaultFocusDuration: DEFAULT_SETTINGS.defaultFocusDuration,
@@ -62,6 +66,8 @@ export class SettingsService {
     try {
       SettingsService.settings.notificationsEnabled = 
         await SettingsService.preferences.get(KEY_NOTIFICATIONS, DEFAULT_SETTINGS.notificationsEnabled) as boolean
+      SettingsService.settings.restEnabled =
+        await SettingsService.preferences.get(KEY_REST_ENABLED, DEFAULT_SETTINGS.restEnabled) as boolean
       SettingsService.settings.defaultRestDuration = 
         await SettingsService.preferences.get(KEY_REST_DURATION, DEFAULT_SETTINGS.defaultRestDuration) as number
       SettingsService.settings.defaultRestInterval = 
@@ -83,6 +89,7 @@ export class SettingsService {
   static getSettings(): AppSettings {
     return {
       notificationsEnabled: SettingsService.settings.notificationsEnabled,
+      restEnabled: SettingsService.settings.restEnabled,
       defaultRestDuration: SettingsService.settings.defaultRestDuration,
       defaultRestInterval: SettingsService.settings.defaultRestInterval,
       defaultFocusDuration: SettingsService.settings.defaultFocusDuration,
@@ -110,6 +117,23 @@ export class SettingsService {
       Logger.info(`Notifications ${enabled ? 'enabled' : 'disabled'}`)
     } catch (error) {
       Logger.error('Failed to save notifications setting', error.toString())
+    }
+  }
+
+  static isRestEnabled(): boolean {
+    return SettingsService.settings.restEnabled
+  }
+
+  static async setRestEnabled(enabled: boolean): Promise<void> {
+    if (!SettingsService.preferences) return
+    
+    try {
+      await SettingsService.preferences.put(KEY_REST_ENABLED, enabled)
+      await SettingsService.preferences.flush()
+      SettingsService.settings.restEnabled = enabled
+      Logger.info(`Rest ${enabled ? 'enabled' : 'disabled'}`)
+    } catch (error) {
+      Logger.error('Failed to save rest enabled setting', error.toString())
     }
   }
 

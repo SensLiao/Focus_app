@@ -72,6 +72,7 @@ struct NumberSelector {
 @Component
 struct SettingsPage {
   @State notifyOn: boolean = true
+  @State allowRest: boolean = true
   @State restMinutes: number = 5
   @State restIntervalHours: number = 0
   @State restIntervalMinutes: number = 25
@@ -79,12 +80,14 @@ struct SettingsPage {
   @State initialRestMinutes: number = 5
   @State initialRestIntervalHours: number = 0
   @State initialRestIntervalMinutes: number = 25
+  @State togglesReady: boolean = false
 
   async aboutToAppear() {
     // 初始化设置服务并加载设置
     await SettingsService.init(getContext(this))
     const settings = SettingsService.getSettings()
     this.notifyOn = settings.notificationsEnabled
+    this.allowRest = settings.restEnabled
     this.restMinutes = settings.defaultRestDuration
     this.focusDuration = settings.defaultFocusDuration
     // 将休息间隔分解为小时和分钟
@@ -94,6 +97,7 @@ struct SettingsPage {
     this.initialRestMinutes = this.restMinutes
     this.initialRestIntervalHours = this.restIntervalHours
     this.initialRestIntervalMinutes = this.restIntervalMinutes
+    this.togglesReady = true
   }
 
   build() {
@@ -131,16 +135,79 @@ struct SettingsPage {
                 .width(50)
                 .height(28)
                 .onChange(async (val: boolean) => {
-                  this.notifyOn = val
-                  await SettingsService.setNotificationsEnabled(val)
-                  promptAction.showToast({ message: val ? '已开启通知' : '已关闭通知' })
+                  if (!this.togglesReady) {
+                    this.notifyOn = val
+                    return
+                  }
+                  if (!val) {
+                    AlertDialog.show({
+                      title: '关闭通知？',
+                      message: '通知用于提醒你返回专注，是应用必要功能。',
+                      primaryButton: {
+                        value: '取消',
+                        action: () => {
+                          this.notifyOn = true
+                        }
+                      },
+                      secondaryButton: {
+                        value: '关闭',
+                        fontColor: Theme.COLOR_ERROR,
+                        action: async () => {
+                          this.notifyOn = false
+                          await SettingsService.setNotificationsEnabled(false)
+                        }
+                      }
+                    })
+                    return
+                  }
+                  this.notifyOn = true
+                  await SettingsService.setNotificationsEnabled(true)
+                  promptAction.showToast({ message: '已开启通知' })
                 })
             }
             .width('100%')
 
-            Text('休息结束或专注暂停时接收通知')
-              .fontSize(13)
-              .fontColor(Theme.COLOR_TEXT_TERTIARY)
+            Row() {
+              Text('允许休息')
+                .fontSize(16)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(Theme.COLOR_TEXT_PRIMARY)
+              Blank()
+              Toggle({ type: ToggleType.Switch, isOn: this.allowRest })
+                .selectedColor(Theme.COLOR_PRIMARY)
+                .width(50)
+                .height(28)
+                .onChange(async (val: boolean) => {
+                  if (!this.togglesReady) {
+                    this.allowRest = val
+                    return
+                  }
+                  if (!val) {
+                    AlertDialog.show({
+                      title: '关闭休息？',
+                      message: '关闭休息后，专注过程中不会安排休息，但你仍可继续专注。',
+                      primaryButton: {
+                        value: '取消',
+                        action: () => {
+                          this.allowRest = true
+                        }
+                      },
+                      secondaryButton: {
+                        value: '关闭',
+                        fontColor: Theme.COLOR_ERROR,
+                        action: async () => {
+                          this.allowRest = false
+                          await SettingsService.setRestEnabled(false)
+                        }
+                      }
+                    })
+                    return
+                  }
+                  this.allowRest = true
+                  await SettingsService.setRestEnabled(true)
+                })
+            }
+            .width('100%')
           }
           .width('100%')
           .padding(20)
