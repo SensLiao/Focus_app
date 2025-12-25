@@ -39,24 +39,25 @@ struct StartPage {
 
   build() {
     Column() {
+      // 顶部导航栏
       Row({ space: 12 }) {
-        Text('<')
+        Text('←')
           .fontSize(24)
-          .fontColor('#1A1A2E')
+          .fontColor(Theme.COLOR_TEXT_SECONDARY)
           .onClick(() => {
             router.back()
           })
 
         Text(this.taskId !== null ? 'Edit Task' : 'New Task')
-          .fontSize(22)
+          .fontSize(20)
           .fontWeight(FontWeight.Medium)
-          .fontColor('#1A1A2E')
+          .fontColor(Theme.COLOR_TEXT_PRIMARY)
       }
       .width('100%')
-      .height(64)
+      .height(60)
       .padding({ left: 16, right: 16 })
       .alignItems(VerticalAlign.Center)
-      .backgroundColor(Color.White)
+      .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
       .border({
         width: { bottom: 1 },
         color: Theme.COLOR_BORDER
@@ -64,56 +65,73 @@ struct StartPage {
 
       if (this.loading) {
         Column() {
-          Text('Loading...')
+          Text('加载中...')
             .fontSize(Theme.FONT_SIZE_MEDIUM)
             .fontColor(Theme.COLOR_TEXT_SECONDARY)
         }
         .layoutWeight(1)
         .justifyContent(FlexAlign.Center)
       } else {
-        Column({ space: 16 }) {
+        Column({ space: 20 }) {
+          // Task Name 输入框
           Column({ space: 8 }) {
-            Text('Task Name')
-              .fontSize(16)
-              .fontColor('#1A1A2E')
-            TextInput({ placeholder: 'Enter task name', text: this.taskTitle })
+            Text('任务名称')
+              .fontSize(14)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(Theme.COLOR_TEXT_PRIMARY)
+            TextInput({ placeholder: '输入任务名称', text: this.taskTitle })
               .width('100%')
               .height(52)
-              .borderRadius(12)
-              .backgroundColor(Color.White)
+              .borderRadius(14)
+              .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
               .border({ width: 1, color: Theme.COLOR_BORDER })
-              .padding({ left: 12, right: 12 })
+              .padding({ left: 16, right: 16 })
+              .fontSize(15)
               .onChange((value: string) => {
                 this.taskTitle = value
               })
           }
+          .alignItems(HorizontalAlign.Start)
 
+          // Task Description 输入框
           Column({ space: 8 }) {
-            Text('Task Description')
-              .fontSize(16)
-              .fontColor('#1A1A2E')
-            TextArea({ placeholder: 'Enter task description (optional)', text: this.taskDescription })
+            Text('任务描述')
+              .fontSize(14)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(Theme.COLOR_TEXT_PRIMARY)
+            TextArea({ placeholder: '输入任务描述（可选）', text: this.taskDescription })
               .width('100%')
               .height(140)
-              .borderRadius(12)
-              .backgroundColor(Color.White)
+              .borderRadius(14)
+              .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
               .border({ width: 1, color: Theme.COLOR_BORDER })
-              .padding({ left: 12, right: 12, top: 12, bottom: 12 })
+              .padding({ left: 16, right: 16, top: 14, bottom: 14 })
+              .fontSize(15)
               .onChange((value: string) => {
                 this.taskDescription = value
               })
           }
+          .alignItems(HorizontalAlign.Start)
 
+          Blank()
+
+          // 按钮区域
           Column({ space: 12 }) {
-            Button(this.taskId !== null ? 'Update' : 'Create')
+            Button(this.taskId !== null ? '更新' : '创建')
               .width('100%')
-              .height(56)
+              .height(52)
               .fontSize(16)
               .fontWeight(FontWeight.Medium)
               .fontColor(Color.White)
-              .backgroundColor(Theme.COLOR_PRIMARY)
-              .borderRadius(16)
+              .backgroundColor(this.taskTitle.trim().length > 0 ? Theme.COLOR_PRIMARY : Theme.COLOR_TEXT_LIGHT)
+              .borderRadius(26)
               .enabled(!this.saving && this.taskTitle.trim().length > 0)
+              .shadow({
+                radius: this.taskTitle.trim().length > 0 ? 12 : 0,
+                color: this.taskTitle.trim().length > 0 ? '#2563EB30' : '#00000000',
+                offsetX: 0,
+                offsetY: 4
+              })
               .onClick(() => {
                 if (this.taskId !== null) {
                   this.saveTask()
@@ -125,27 +143,27 @@ struct StartPage {
             if (this.taskId === null) {
               Button('Start without a task')
                 .width('100%')
-                .height(52)
+                .height(48)
                 .fontSize(15)
-                .fontColor('#4B5563')
-                .backgroundColor('#F3F4F6')
-                .borderRadius(14)
+                .fontColor(Theme.COLOR_TEXT_SECONDARY)
+                .backgroundColor(Theme.COLOR_BACKGROUND)
+                .borderRadius(24)
                 .enabled(!this.saving)
                 .onClick(() => {
                   this.startWithoutTask()
                 })
             }
           }
-          .padding({ top: 12 })
+          .padding({ bottom: 16 })
         }
-        .padding({ left: 20, right: 20, top: 20, bottom: 32 })
+        .padding({ left: 20, right: 20, top: 24, bottom: 24 })
         .layoutWeight(1)
-        .backgroundColor('#F7F8FA')
+        .backgroundColor(Theme.COLOR_BACKGROUND)
       }
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#F7F8FA')
+    .backgroundColor(Theme.COLOR_BACKGROUND)
   }
 
   private async saveTask() {
