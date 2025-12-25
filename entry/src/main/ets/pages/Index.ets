@@ -70,16 +70,16 @@ struct Index {
     Stack({ alignContent: Alignment.BottomEnd }) {
       Column() {
         Row() {
-          Text('To do List')
-            .fontSize(26)
-            .fontWeight(FontWeight.Bold)
+          Text('待办任务')
+            .fontSize(24)
+            .fontWeight(FontWeight.Medium)
             .fontColor(Theme.COLOR_TEXT_PRIMARY)
         }
         .width('100%')
-        .height(64)
-        .padding({ left: 20, right: 20 })
+        .height(60)
+        .padding({ left: 16, right: 16 })
         .alignItems(VerticalAlign.Center)
-        .backgroundColor(Color.White)
+        .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
         .border({
           width: { bottom: 1 },
           color: Theme.COLOR_BORDER
@@ -87,26 +87,34 @@ struct Index {
 
         if (this.taskState.loading) {
           Column() {
-            Text('Loading tasks...')
+            Text('加载中...')
               .fontSize(Theme.FONT_SIZE_MEDIUM)
               .fontColor(Theme.COLOR_TEXT_SECONDARY)
           }
           .layoutWeight(1)
           .justifyContent(FlexAlign.Center)
         } else if (this.taskState.tasks.length === 0) {
-          Column({ space: Theme.SPACE_MEDIUM }) {
+          Column({ space: 16 }) {
             Text('📝')
-              .fontSize(48)
-            Text('No tasks yet. Add your first task to get started!')
-              .fontSize(Theme.FONT_SIZE_MEDIUM)
+              .fontSize(56)
+            Text('暂无任务')
+              .fontSize(18)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(Theme.COLOR_TEXT_PRIMARY)
+            Text('添加你的第一个任务开始专注吧！')
+              .fontSize(14)
               .fontColor(Theme.COLOR_TEXT_SECONDARY)
               .textAlign(TextAlign.Center)
+              .margin({ top: -8 })
 
-            Button('Start without a task')
-              .height(48)
-              .backgroundColor(Theme.COLOR_PRIMARY)
-              .fontColor(Color.White)
-              .borderRadius(Theme.BORDER_RADIUS_LARGE)
+            Button('无任务专注')
+              .height(52)
+              .fontSize(15)
+              .fontWeight(FontWeight.Medium)
+              .backgroundColor(Theme.COLOR_BACKGROUND)
+              .fontColor(Theme.COLOR_TEXT_SECONDARY)
+              .borderRadius(14)
+              .margin({ top: 8 })
               .onClick(() => {
                 this.startFocusWithoutTask()
               })
@@ -115,74 +123,75 @@ struct Index {
           .justifyContent(FlexAlign.Center)
           .padding({ left: 24, right: 24 })
         } else {
-          List({ space: Theme.SPACE_MEDIUM }) {
+          List({ space: 12 }) {
             ForEach(this.taskState.tasks, (task: Task) => {
               ListItem() {
-                Row({ space: Theme.SPACE_MEDIUM }) {
-                  Column({ space: 6 }) {
+                Row({ space: 12 }) {
+                  Column({ space: 4 }) {
                     Text(task.title)
-                      .fontSize(18)
+                      .fontSize(16)
                       .fontWeight(FontWeight.Medium)
                       .fontColor(Theme.COLOR_TEXT_PRIMARY)
                       .maxLines(1)
                       .textOverflow({ overflow: TextOverflow.Ellipsis })
                     if (task.description) {
                       Text(task.description)
-                        .fontSize(14)
+                        .fontSize(13)
                         .fontColor(Theme.COLOR_TEXT_SECONDARY)
                         .maxLines(1)
                         .textOverflow({ overflow: TextOverflow.Ellipsis })
                     }
-                    Row({ space: Theme.SPACE_SMALL }) {
-                      Text(`Focus time: ${this.formatDuration(task.totalFocusTime)}`)
-                        .fontSize(12)
-                        .fontColor(Theme.COLOR_TEXT_TERTIARY)
-                    }
+                    Text(`专注时长: ${this.formatDuration(task.totalFocusTime)}`)
+                      .fontSize(13)
+                      .fontColor(Theme.COLOR_TEXT_TERTIARY)
+                      .margin({ top: 2 })
                   }
                   .layoutWeight(1)
                   .alignItems(HorizontalAlign.Start)
 
                   if (this.isEditMode) {
                     Row({ space: 8 }) {
-                      Button('Edit')
-                        .fontSize(14)
-                        .height(40)
-                        .backgroundColor('#E6F0FF')
-                        .fontColor(Theme.COLOR_PRIMARY)
-                        .borderRadius(12)
-                        .onClick(() => {
-                          this.goToTaskForm(task)
-                        })
-                      Button('Delete')
-                        .fontSize(14)
-                        .height(40)
-                        .backgroundColor('#FFEAEA')
-                        .fontColor(Theme.COLOR_ERROR)
-                        .borderRadius(12)
-                        .onClick(() => {
-                          this.deleteTarget = task
-                          this.confirmDelete()
-                        })
+                      Button({ type: ButtonType.Normal }) {
+                        Text('✏️').fontSize(18)
+                      }
+                      .width(44)
+                      .height(44)
+                      .backgroundColor(Theme.COLOR_PRIMARY_BG)
+                      .borderRadius(12)
+                      .onClick(() => {
+                        this.goToTaskForm(task)
+                      })
+                      Button({ type: ButtonType.Normal }) {
+                        Text('🗑️').fontSize(18)
+                      }
+                      .width(44)
+                      .height(44)
+                      .backgroundColor(Theme.COLOR_ERROR_BG)
+                      .borderRadius(12)
+                      .onClick(() => {
+                        this.deleteTarget = task
+                        this.confirmDelete()
+                      })
                     }
                   } else if (this.isActiveTask(task)) {
                     Button({ type: ButtonType.Circle }) {
-                      Text(this.isRestingTask(task) ? '☕' : '▶')
-                        .fontSize(22)
+                      Text(this.isRestingTask(task) ? '☕' : '▶️')
+                        .fontSize(20)
                     }
-                    .width(48)
-                    .height(48)
-                    .backgroundColor(this.isRestingTask(task) ? '#F0E5FF' : '#E6FFFB')
+                    .width(44)
+                    .height(44)
+                    .backgroundColor(this.isRestingTask(task) ? Theme.COLOR_PURPLE_BG : Theme.COLOR_SUCCESS_BG)
                     .onClick(() => {
                       this.resumeActiveTask(task)
                     })
                   } else {
                     Button({ type: ButtonType.Circle }) {
-                      Text('▶')
+                      Text('▶️')
                         .fontSize(20)
                     }
-                    .width(48)
-                    .height(48)
-                    .backgroundColor('#E6FFFB')
+                    .width(44)
+                    .height(44)
+                    .backgroundColor(Theme.COLOR_SUCCESS_BG)
                     .onClick(() => {
                       this.startFocusWithTask(task)
                     })
@@ -190,11 +199,11 @@ struct Index {
                 }
                 .width('100%')
                 .padding(16)
-                .backgroundColor(Color.White)
+                .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
                 .borderRadius(16)
                 .shadow({
-                  radius: Theme.SHADOW_SMALL.radius,
-                  color: Theme.SHADOW_SMALL.color,
+                  radius: 4,
+                  color: '#0000000A',
                   offsetX: 0,
                   offsetY: 2
                 })
@@ -203,29 +212,29 @@ struct Index {
           }
           .width('100%')
           .layoutWeight(1)
-          .padding({ left: 20, right: 20, top: 16, bottom: 80 })
+          .padding({ left: 16, right: 16, top: 12, bottom: 80 })
         }
 
         BottomNav({ currentIndex: 0 })
       }
       .width('100%')
       .height('100%')
-      .backgroundColor('#F7F8FA')
+      .backgroundColor(Theme.COLOR_BACKGROUND)
 
       Column({ space: 12 }) {
         Button({ type: ButtonType.Circle }) {
-          Text(this.isEditMode ? '✓' : '✎')
-            .fontSize(22)
+          Text(this.isEditMode ? '✕' : '✏️')
+            .fontSize(this.isEditMode ? 24 : 22)
             .fontColor(Color.White)
         }
-        .width(64)
-        .height(64)
-        .backgroundColor(this.isEditMode ? '#FA8C16' : '#595959')
+        .width(56)
+        .height(56)
+        .backgroundColor(this.isEditMode ? Theme.COLOR_WARNING : '#6B7280')
         .shadow({
-          radius: Theme.SHADOW_MEDIUM.radius,
-          color: Theme.SHADOW_MEDIUM.color,
+          radius: 12,
+          color: this.isEditMode ? '#F9731640' : '#6B728040',
           offsetX: 0,
-          offsetY: 6
+          offsetY: 4
         })
         .onClick(() => {
           this.isEditMode = !this.isEditMode
@@ -233,23 +242,24 @@ struct Index {
 
         Button({ type: ButtonType.Circle }) {
           Text('+')
-            .fontSize(28)
+            .fontSize(32)
+            .fontWeight(FontWeight.Normal)
             .fontColor(Color.White)
         }
-        .width(64)
-        .height(64)
+        .width(56)
+        .height(56)
         .backgroundColor(Theme.COLOR_PRIMARY)
         .shadow({
-          radius: Theme.SHADOW_MEDIUM.radius,
-          color: Theme.SHADOW_MEDIUM.color,
+          radius: 12,
+          color: '#2563EB40',
           offsetX: 0,
-          offsetY: 6
+          offsetY: 4
         })
         .onClick(() => {
           this.goToTaskForm()
         })
       }
-      .margin({ right: 20, bottom: 96 })
+      .margin({ right: 16, bottom: 88 })
 
       if (this.showRecoverDialog) {
         this.RecoverDialog()
@@ -273,30 +283,30 @@ struct Index {
         .onClick(() => {})
 
       Column({ space: Theme.SPACE_LARGE }) {
-        Text('Unfinished focus session found')
+        Text('发现未完成的专注')
           .fontSize(Theme.FONT_SIZE_LARGE)
           .fontWeight(FontWeight.Bold)
           .fontColor(Theme.COLOR_TEXT_PRIMARY)
 
         Column({ space: Theme.SPACE_SMALL }) {
-          Text(`Task: ${this.recoveredTaskTitle}`)
+          Text(`任务: ${this.recoveredTaskTitle}`)
             .fontSize(Theme.FONT_SIZE_MEDIUM)
             .fontColor(Theme.COLOR_TEXT_PRIMARY)
 
           if (this.recoveredSession) {
-            Text(`Focus time: ${this.formatDuration(this.recoveredSession.actualFocusDuration)}`)
+            Text(`专注时长: ${this.formatDuration(this.recoveredSession.actualFocusDuration)}`)
               .fontSize(Theme.FONT_SIZE_SMALL)
               .fontColor(Theme.COLOR_TEXT_SECONDARY)
           }
 
-          Text('Last session was paused. Continue?')
+          Text('上次专注已暂停，是否继续？')
             .fontSize(Theme.FONT_SIZE_SMALL)
             .fontColor(Theme.COLOR_TEXT_TERTIARY)
             .margin({ top: Theme.SPACE_SMALL })
         }
 
         Row({ space: Theme.SPACE_MEDIUM }) {
-          Button('Discard')
+          Button('放弃')
             .fontSize(Theme.FONT_SIZE_MEDIUM)
             .height(48)
             .layoutWeight(1)
@@ -310,7 +320,7 @@ struct Index {
               this.recoveredSession = null
             })
 
-          Button('Continue')
+          Button('继续')
             .fontSize(Theme.FONT_SIZE_MEDIUM)
             .height(48)
             .layoutWeight(1)
@@ -350,17 +360,17 @@ struct Index {
         .onClick(() => {})
 
       Column({ space: Theme.SPACE_LARGE }) {
-        Text('Enable notifications')
+        Text('开启通知')
           .fontSize(Theme.FONT_SIZE_LARGE)
           .fontWeight(FontWeight.Bold)
           .fontColor(Theme.COLOR_TEXT_PRIMARY)
 
-        Text('This app needs notification permission to alert you when rest timers end.')
+        Text('应用需要通知权限来提醒你休息时间到了。')
           .fontSize(Theme.FONT_SIZE_SMALL)
           .fontColor(Theme.COLOR_TEXT_SECONDARY)
 
         Row({ space: Theme.SPACE_MEDIUM }) {
-          Button('Cancel')
+          Button('取消')
             .fontSize(Theme.FONT_SIZE_MEDIUM)
             .height(48)
             .layoutWeight(1)

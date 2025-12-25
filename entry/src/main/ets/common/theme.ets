@@ -16,28 +16,36 @@ interface GradientColor {
 }
 
 export class Theme {
-  // 主色调 - 皇家蓝（Royal Blue）- 基于 UI_DESIGN_SPECIFICATION.md
-  static readonly COLOR_PRIMARY = '#2F54EB'  // 皇家蓝主色
-  static readonly COLOR_PRIMARY_LIGHT = '#597EF7'
-  static readonly COLOR_PRIMARY_DARK = '#1D39C4'
+  // 主色调 - 现代蓝色系 (基于 Sample_Frontend)
+  static readonly COLOR_PRIMARY = '#2563EB'  // Blue-600 主色
+  static readonly COLOR_PRIMARY_LIGHT = '#3B82F6'  // Blue-500
+  static readonly COLOR_PRIMARY_DARK = '#1D4ED8'  // Blue-700
+  static readonly COLOR_PRIMARY_BG = '#EFF6FF'  // Blue-50 背景
   
   // 功能色
-  static readonly COLOR_SUCCESS = '#52C41A'  // 成功绿
-  static readonly COLOR_SUCCESS_LIGHT = '#95DE64'
-  static readonly COLOR_MINT = '#389E0D'  // 薄荷绿（播放按钮）
-  static readonly COLOR_MINT_BG = '#E6FFEB'  // 薄荷绿背景
-  static readonly COLOR_WARNING = '#FA8C16'  // 橙色（休息模式）
-  static readonly COLOR_ERROR = '#F5222D'  // 错误红
+  static readonly COLOR_SUCCESS = '#10B981'  // Emerald-500 成功绿
+  static readonly COLOR_SUCCESS_LIGHT = '#34D399'  // Emerald-400
+  static readonly COLOR_SUCCESS_BG = '#ECFDF5'  // Emerald-50 背景
+  static readonly COLOR_MINT = '#059669'  // Emerald-600（播放按钮）
+  static readonly COLOR_MINT_BG = '#D1FAE5'  // Emerald-100 背景
+  static readonly COLOR_WARNING = '#F97316'  // Orange-500（休息模式）
+  static readonly COLOR_WARNING_BG = '#FFF7ED'  // Orange-50 背景
+  static readonly COLOR_ERROR = '#EF4444'  // Red-500 错误红
+  static readonly COLOR_ERROR_BG = '#FEF2F2'  // Red-50 背景
+  static readonly COLOR_PURPLE = '#8B5CF6'  // Purple-500
+  static readonly COLOR_PURPLE_BG = '#F3E8FF'  // Purple-100 背景
   
   // 文本颜色
-  static readonly COLOR_TEXT_PRIMARY = '#1F1F1F'  // 深黑
-  static readonly COLOR_TEXT_SECONDARY = '#8C8C8C'  // 中灰
-  static readonly COLOR_TEXT_TERTIARY = '#BFBFBF'  // 浅灰/禁用
+  static readonly COLOR_TEXT_PRIMARY = '#111827'  // Gray-900 深黑
+  static readonly COLOR_TEXT_SECONDARY = '#6B7280'  // Gray-500 中灰
+  static readonly COLOR_TEXT_TERTIARY = '#9CA3AF'  // Gray-400 浅灰/禁用
+  static readonly COLOR_TEXT_LIGHT = '#D1D5DB'  // Gray-300
   
   // 背景颜色
-  static readonly COLOR_BACKGROUND = '#F5F7FA'  // 浅灰背景
+  static readonly COLOR_BACKGROUND = '#F9FAFB'  // Gray-50 浅灰背景
   static readonly COLOR_CARD_BACKGROUND = '#FFFFFF'  // 纯白
-  static readonly COLOR_BORDER = '#E8E8E8'  // 边框色
+  static readonly COLOR_BORDER = '#E5E7EB'  // Gray-200 边框色
+  static readonly COLOR_DIVIDER = '#F3F4F6'  // Gray-100 分割线
 
   // 字体
   static readonly FONT_SIZE_TITLE = 28

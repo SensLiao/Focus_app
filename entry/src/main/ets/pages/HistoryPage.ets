@@ -46,87 +46,121 @@ struct HistoryPage {
 
   build() {
     Column() {
-      Column() {
-        Text('History')
-          .fontSize(28)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(Theme.COLOR_TEXT_PRIMARY)
-      }
-      .width('100%')
-      .padding({ left: Theme.SPACE_LARGE, right: Theme.SPACE_LARGE, top: Theme.SPACE_LARGE, bottom: Theme.SPACE_SMALL })
-
+      // 顶部标题栏
       Row() {
-        Text(this.appliedDate ? `Filtered: ${this.formatDateShort(this.appliedDate.getTime())}` : 'No filter')
-          .fontSize(Theme.FONT_SIZE_TINY)
-          .fontColor(Theme.COLOR_TEXT_TERTIARY)
+        Text('历史记录')
+          .fontSize(24)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(Theme.COLOR_TEXT_PRIMARY)
         Blank()
-        Button(this.filterOpen ? 'Hide Filter' : 'Filter')
-          .fontSize(Theme.FONT_SIZE_SMALL)
-          .height(32)
-          .backgroundColor(Theme.COLOR_PRIMARY)
-          .fontColor(Color.White)
-          .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
-          .onClick(() => {
-            if (!this.filterOpen) {
-              const base = this.appliedDate ?? this.selectedDate
-              this.pickerYear = base.getFullYear().toString()
-              this.pickerMonth = (base.getMonth() + 1).toString()
-              this.pickerDay = base.getDate().toString()
-            }
-            this.filterOpen = !this.filterOpen
-          })
+        Button({ type: ButtonType.Normal }) {
+          Text('📋').fontSize(20)
+        }
+        .width(40)
+        .height(40)
+        .backgroundColor(this.filterOpen ? Theme.COLOR_PRIMARY_BG : Color.Transparent)
+        .borderRadius(10)
+        .onClick(() => {
+          if (!this.filterOpen) {
+            const base = this.appliedDate ?? this.selectedDate
+            this.pickerYear = base.getFullYear().toString()
+            this.pickerMonth = (base.getMonth() + 1).toString()
+            this.pickerDay = base.getDate().toString()
+          }
+          this.filterOpen = !this.filterOpen
+        })
       }
       .width('100%')
-      .padding({ left: Theme.SPACE_LARGE, right: Theme.SPACE_LARGE, bottom: Theme.SPACE_SMALL })
+      .height(60)
+      .padding({ left: 16, right: 16 })
+      .alignItems(VerticalAlign.Center)
+      .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+      .border({
+        width: { bottom: 1 },
+        color: Theme.COLOR_BORDER
+      })
+
+      // 过滤状态显示
+      if (this.appliedDate) {
+        Row() {
+          Text(`已筛选: ${this.formatDateShort(this.appliedDate.getTime())}`)
+            .fontSize(13)
+            .fontColor(Theme.COLOR_PRIMARY)
+          Blank()
+          Text('✕')
+            .fontSize(14)
+            .fontColor(Theme.COLOR_TEXT_TERTIARY)
+            .onClick(() => {
+              this.clearFilter()
+            })
+        }
+        .width('100%')
+        .padding({ left: 16, right: 16, top: 10, bottom: 10 })
+        .backgroundColor(Theme.COLOR_PRIMARY_BG)
+      }
 
       if (this.filterOpen) {
-        Column({ space: Theme.SPACE_SMALL }) {
-          Row({ space: Theme.SPACE_SMALL }) {
-            Column({ space: 6 }) {
-              Text('Year')
-                .fontSize(Theme.FONT_SIZE_TINY)
+        Column({ space: 12 }) {
+          Text('选择日期')
+            .fontSize(13)
+            .fontColor(Theme.COLOR_TEXT_SECONDARY)
+            .width('100%')
+
+          Row({ space: 8 }) {
+            // Year 输入
+            Column({ space: 4 }) {
+              Text('年')
+                .fontSize(11)
                 .fontColor(Theme.COLOR_TEXT_TERTIARY)
               TextInput({ placeholder: 'YYYY', text: this.pickerYear })
                 .width('100%')
-                .height(40)
-                .borderRadius(8)
-                .backgroundColor(Color.White)
+                .height(44)
+                .borderRadius(10)
+                .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
                 .border({ width: 1, color: Theme.COLOR_BORDER })
-                .padding({ left: 8, right: 8 })
+                .padding({ left: 12, right: 12 })
+                .textAlign(TextAlign.Center)
+                .fontSize(14)
                 .onChange((value: string) => {
                   this.pickerYear = value.replace(/[^\d]/g, '')
                 })
             }
             .layoutWeight(1)
 
-            Column({ space: 6 }) {
-              Text('Month')
-                .fontSize(Theme.FONT_SIZE_TINY)
+            // Month 输入
+            Column({ space: 4 }) {
+              Text('月')
+                .fontSize(11)
                 .fontColor(Theme.COLOR_TEXT_TERTIARY)
               TextInput({ placeholder: 'MM', text: this.pickerMonth })
                 .width('100%')
-                .height(40)
-                .borderRadius(8)
-                .backgroundColor(Color.White)
+                .height(44)
+                .borderRadius(10)
+                .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
                 .border({ width: 1, color: Theme.COLOR_BORDER })
-                .padding({ left: 8, right: 8 })
+                .padding({ left: 12, right: 12 })
+                .textAlign(TextAlign.Center)
+                .fontSize(14)
                 .onChange((value: string) => {
                   this.pickerMonth = value.replace(/[^\d]/g, '')
                 })
             }
             .layoutWeight(1)
 
-            Column({ space: 6 }) {
-              Text('Day')
-                .fontSize(Theme.FONT_SIZE_TINY)
+            // Day 输入
+            Column({ space: 4 }) {
+              Text('日')
+                .fontSize(11)
                 .fontColor(Theme.COLOR_TEXT_TERTIARY)
               TextInput({ placeholder: 'DD', text: this.pickerDay })
                 .width('100%')
-                .height(40)
-                .borderRadius(8)
-                .backgroundColor(Color.White)
+                .height(44)
+                .borderRadius(10)
+                .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
                 .border({ width: 1, color: Theme.COLOR_BORDER })
-                .padding({ left: 8, right: 8 })
+                .padding({ left: 12, right: 12 })
+                .textAlign(TextAlign.Center)
+                .fontSize(14)
                 .onChange((value: string) => {
                   this.pickerDay = value.replace(/[^\d]/g, '')
                 })
@@ -134,35 +168,43 @@ struct HistoryPage {
             .layoutWeight(1)
           }
 
-          Row({ space: Theme.SPACE_SMALL }) {
-            Button('Apply Filter')
+          Row({ space: 8 }) {
+            Button('应用')
               .layoutWeight(1)
-              .height(40)
+              .height(44)
+              .fontSize(14)
+              .fontWeight(FontWeight.Medium)
               .backgroundColor(Theme.COLOR_PRIMARY)
               .fontColor(Color.White)
-              .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
+              .borderRadius(12)
               .onClick(() => {
                 void this.applyFilter()
               })
 
-            Button('Clear')
+            Button('清除')
               .layoutWeight(1)
-              .height(40)
+              .height(44)
+              .fontSize(14)
               .backgroundColor(Theme.COLOR_BACKGROUND)
               .fontColor(Theme.COLOR_TEXT_SECONDARY)
-              .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
+              .borderRadius(12)
               .onClick(() => {
                 this.clearFilter()
               })
           }
         }
         .width('100%')
-        .padding({ left: Theme.SPACE_LARGE, right: Theme.SPACE_LARGE, bottom: Theme.SPACE_SMALL })
+        .padding(16)
+        .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+        .border({
+          width: { bottom: 1 },
+          color: Theme.COLOR_BORDER
+        })
       }
 
       if (this.loading) {
         Column() {
-          Text('Loading...')
+          Text('加载中...')
             .fontSize(Theme.FONT_SIZE_MEDIUM)
             .fontColor(Theme.COLOR_TEXT_SECONDARY)
         }
@@ -188,7 +230,7 @@ struct HistoryPage {
 
       if (this.getVisibleSessions().length === 0) {
         Column({ space: Theme.SPACE_MEDIUM }) {
-          Text('No completed tasks yet.')
+          Text('暂无完成的任务')
             .fontSize(Theme.FONT_SIZE_MEDIUM)
             .fontColor(Theme.COLOR_TEXT_TERTIARY)
         }
@@ -225,7 +267,7 @@ struct HistoryPage {
             .height(10)
             .backgroundColor('#F59E0B')
             .borderRadius(5)
-          Text('Rest')
+          Text('休息')
             .fontSize(Theme.FONT_SIZE_TINY)
             .fontColor(Theme.COLOR_TEXT_SECONDARY)
         }
@@ -235,7 +277,7 @@ struct HistoryPage {
             .height(10)
             .backgroundColor(Theme.COLOR_PRIMARY)
             .borderRadius(5)
-          Text('Focus')
+          Text('专注')
             .fontSize(Theme.FONT_SIZE_TINY)
             .fontColor(Theme.COLOR_TEXT_SECONDARY)
         }
@@ -243,7 +285,7 @@ struct HistoryPage {
 
       Row({ space: Theme.SPACE_SMALL }) {
         Column() {
-          Text('min')
+          Text('分钟')
             .fontSize(Theme.FONT_SIZE_TINY)
             .fontColor(Theme.COLOR_TEXT_TERTIARY)
             .margin({ bottom: 4 })
@@ -327,7 +369,7 @@ struct HistoryPage {
             .fontColor(Theme.COLOR_TEXT_PRIMARY)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
-          Text(`Completed: ${this.formatDate(this.getCompletionTime(session))}`)
+          Text(`完成于: ${this.formatDate(this.getCompletionTime(session))}`)
             .fontSize(Theme.FONT_SIZE_TINY)
             .fontColor(Theme.COLOR_TEXT_TERTIARY)
         }
@@ -350,7 +392,7 @@ struct HistoryPage {
         Column({ space: 8 }) {
           Row({ space: 12 }) {
             Column() {
-              Text('Total duration')
+              Text('总时长')
                 .fontSize(Theme.FONT_SIZE_TINY)
                 .fontColor(Theme.COLOR_TEXT_TERTIARY)
               Text(this.formatDurationShort(session.totalDuration))
@@ -359,7 +401,7 @@ struct HistoryPage {
             }
             .layoutWeight(1)
             Column() {
-              Text('Total focus')
+              Text('专注时长')
                 .fontSize(Theme.FONT_SIZE_TINY)
                 .fontColor(Theme.COLOR_TEXT_TERTIARY)
               Text(this.formatDurationShort(session.actualFocusDuration))
@@ -371,7 +413,7 @@ struct HistoryPage {
 
           Row({ space: 12 }) {
             Column() {
-              Text('Rest count')
+              Text('休息次数')
                 .fontSize(Theme.FONT_SIZE_TINY)
                 .fontColor(Theme.COLOR_TEXT_TERTIARY)
               Text(session.breakCount.toString())
@@ -380,7 +422,7 @@ struct HistoryPage {
             }
             .layoutWeight(1)
             Column() {
-              Text('Total rest')
+              Text('休息时长')
                 .fontSize(Theme.FONT_SIZE_TINY)
                 .fontColor(Theme.COLOR_TEXT_TERTIARY)
               Text(this.formatDurationShort(this.getRestDuration(session)))

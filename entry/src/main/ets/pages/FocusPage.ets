@@ -13,6 +13,7 @@ import { BreakRepo } from '../data/BreakRepo'
 import { SettingsService } from '../services/SettingsService'
 import { AppLifecycleService } from '../services/AppLifecycleService'
 import { NotificationService } from '../services/NotificationService'
+import { Theme } from '../common/theme'
 
 interface SessionSummary {
   id: number
@@ -575,49 +576,67 @@ struct FocusPage {
     Stack() {
       Column() {
         Row({ space: 12 }) {
-          Text('<')
+          Text('←')
             .fontSize(24)
-            .fontColor('#111827')
+            .fontColor(Theme.COLOR_TEXT_SECONDARY)
             .onClick(() => {
               this.goBack()
             })
           Text(this.taskTitle)
-            .fontSize(22)
+            .fontSize(20)
             .fontWeight(FontWeight.Medium)
-            .fontColor('#111827')
+            .fontColor(Theme.COLOR_TEXT_PRIMARY)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
         }
         .width('100%')
-        .height(64)
+        .height(60)
         .padding({ left: 16, right: 16 })
         .alignItems(VerticalAlign.Center)
-        .backgroundColor(Color.White)
-        .border({ width: { bottom: 1 }, color: '#E5E7EB' })
+        .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+        .border({ width: { bottom: 1 }, color: Theme.COLOR_BORDER })
 
         if (this.taskDescription !== '') {
           Column() {
-            Text('Description')
-              .fontSize(14)
-              .fontColor('#374151')
+            Text('描述')
+              .fontSize(13)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(Theme.COLOR_TEXT_PRIMARY)
             Text(this.taskDescription)
               .fontSize(13)
-              .fontColor('#6B7280')
+              .fontColor(Theme.COLOR_TEXT_SECONDARY)
+              .margin({ top: 4 })
           }
           .width('100%')
-          .padding({ left: 20, right: 20, top: 14, bottom: 14 })
-          .backgroundColor(Color.White)
-          .border({ width: { bottom: 1 }, color: '#E5E7EB' })
+          .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+          .margin({ left: 16, right: 16, top: 12 })
+          .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+          .borderRadius(12)
+          .alignItems(HorizontalAlign.Start)
+          .shadow({
+            radius: 4,
+            color: '#0000000A',
+            offsetX: 0,
+            offsetY: 2
+          })
         }
 
         Column({ space: 24 }) {
           Column() {
             Stack() {
+              // 外层蓝紫色环
               Circle()
-                .width(280)
-                .height(280)
-                .fill('#EEF2FF')
-                .shadow({ radius: 18, color: '#3B66F520', offsetX: 0, offsetY: 8 })
+                .width(300)
+                .height(300)
+                .fill(Color.Transparent)
+                .stroke(this.displayIsBreaking ? '#FFE8D8' : '#E4E0F8')
+                .strokeWidth(20)
+
+              // 内层白色圆
+              Circle()
+                .width(260)
+                .height(260)
+                .fill('#FFFFFF')
 
               if (this.getProgress() > 0) {
                 Progress({
@@ -625,33 +644,33 @@ struct FocusPage {
                   total: 100,
                   type: ProgressType.Ring
                 })
-                  .width(280)
-                  .height(280)
-                  .color('#2F54EB')
-                  .style({ strokeWidth: 8 })
+                  .width(290)
+                  .height(290)
+                  .color(this.displayIsBreaking ? '#F97316' : '#3B82F6')
+                  .style({ strokeWidth: 6 })
               }
 
-              Column({ space: 8 }) {
-                Column({ space: 6 }) {
+              Column({ space: 4 }) {
+                Column({ space: 4 }) {
                   if (this.displayIsBreaking) {
-                    Column({ space: 6 }) {
-                      Text('Resting')
-                        .fontSize(15)
-                        .fontColor('#6B7280')
+                    Column({ space: 4 }) {
+                      Text('休息中')
+                        .fontSize(14)
+                        .fontColor(Theme.COLOR_WARNING)
                       Text(this.getDisplayTime())
-                        .fontSize(64)
-                        .fontWeight(FontWeight.Bold)
-                        .fontColor('#111827')
+                        .fontSize(48)
+                        .fontWeight(FontWeight.Medium)
+                        .fontColor(Theme.COLOR_TEXT_PRIMARY)
                     }
                   } else {
-                    Column({ space: 6 }) {
-                      Text(this.viewingOtherTask ? 'Focus time' : 'Focus time')
-                        .fontSize(15)
-                        .fontColor('#6B7280')
+                    Column({ space: 4 }) {
+                      Text('专注时间')
+                        .fontSize(14)
+                        .fontColor(Theme.COLOR_TEXT_SECONDARY)
                       Text(this.getDisplayTime())
-                        .fontSize(64)
-                        .fontWeight(FontWeight.Bold)
-                        .fontColor('#111827')
+                        .fontSize(48)
+                        .fontWeight(FontWeight.Medium)
+                        .fontColor(Theme.COLOR_TEXT_PRIMARY)
                     }
                   }
                 }
@@ -662,83 +681,97 @@ struct FocusPage {
                   Column({ space: 2 }) {
                     Text(this.getSecondaryFocusInfo())
                       .fontSize(12)
-                      .fontColor('#9CA3AF')
-                    Text(`Total focus: ${this.formatTime(this.completedFocusOffset + this.getElapsedMs())}`)
+                      .fontColor(Theme.COLOR_TEXT_TERTIARY)
+                    Text(`总专注: ${this.formatTime(this.completedFocusOffset + this.getElapsedMs())}`)
                       .fontSize(12)
-                      .fontColor('#9CA3AF')
+                      .fontColor(Theme.COLOR_TEXT_TERTIARY)
                   }
                 } else {
                   Column({ space: 2 }) {
                     if (this.restIntervalMs > 0 && !this.viewingOtherTask) {
-                      Text(`Next rest: ${this.formatTime(this.getNextRestRemainingMs())}`)
+                      Text(`下次休息: ${this.formatTime(this.getNextRestRemainingMs())}`)
                         .fontSize(12)
-                        .fontColor('#9CA3AF')
+                        .fontColor(Theme.COLOR_TEXT_TERTIARY)
                     } else {
-                      Text('Placeholder')
+                      Text('')
                         .fontSize(12)
-                        .fontColor('#9CA3AF')
-                        .opacity(0)
+                        .fontColor(Theme.COLOR_TEXT_TERTIARY)
                     }
-                    Text(`Total focus: ${this.formatTime(this.completedFocusOffset + this.getElapsedMs())}`)
+                    Text(`总专注: ${this.formatTime(this.completedFocusOffset + this.getElapsedMs())}`)
                       .fontSize(12)
-                      .fontColor('#9CA3AF')
+                      .fontColor(Theme.COLOR_TEXT_TERTIARY)
                   }
                 }
               }
             }
-            .margin({ top: 24 })
+            .margin({ top: 20 })
             .align(Alignment.Center)
           }
           .width('100%')
           .justifyContent(FlexAlign.Center)
 
           if (this.isIdle || !this.focusState.currentSession) {
-            Column({ space: 12 }) {
-              Row({ space: 12 }) {
+            Column({ space: 16 }) {
+              // 倒计时模式切换
+              Row({ space: 8 }) {
                 Toggle({ type: ToggleType.Switch, isOn: this.isCountdownMode })
-                  .selectedColor('#2F54EB')
+                  .selectedColor(Theme.COLOR_PRIMARY)
+                  .width(44)
+                  .height(24)
                   .onChange((isOn: boolean) => {
                     this.isCountdownMode = isOn
                   })
-                Text('Countdown Mode')
-                  .fontSize(15)
-                  .fontColor('#111827')
+                Text('倒计时模式')
+                  .fontSize(14)
+                  .fontColor(Theme.COLOR_TEXT_SECONDARY)
 
                 if (this.isCountdownMode) {
-                  Row({ space: 8 }) {
-                    Button('-')
-                      .width(36)
-                      .height(36)
-                      .backgroundColor('#F3F4F6')
-                      .onClick(() => {
-                        if (this.countdownMinutes > 1) {
-                          this.countdownMinutes -= 1
-                        }
-                      })
-                    Text(`${this.countdownMinutes} min`)
+                  Row({ space: 6 }) {
+                    Button({ type: ButtonType.Circle }) {
+                      Text('-').fontSize(16).fontColor(Theme.COLOR_TEXT_SECONDARY)
+                    }
+                    .width(32)
+                    .height(32)
+                    .backgroundColor(Theme.COLOR_BACKGROUND)
+                    .onClick(() => {
+                      if (this.countdownMinutes > 1) {
+                        this.countdownMinutes -= 1
+                      }
+                    })
+                    Text(`${this.countdownMinutes}`)
                       .fontSize(14)
-                      .fontColor('#111827')
-                    Button('+')
+                      .fontWeight(FontWeight.Medium)
+                      .fontColor(Theme.COLOR_TEXT_PRIMARY)
                       .width(36)
-                      .height(36)
-                      .backgroundColor('#F3F4F6')
-                      .onClick(() => {
-                        this.countdownMinutes += 1
-                      })
+                      .textAlign(TextAlign.Center)
+                    Button({ type: ButtonType.Circle }) {
+                      Text('+').fontSize(16).fontColor(Theme.COLOR_TEXT_SECONDARY)
+                    }
+                    .width(32)
+                    .height(32)
+                    .backgroundColor(Theme.COLOR_BACKGROUND)
+                    .onClick(() => {
+                      this.countdownMinutes += 1
+                    })
+                    Text('分钟')
+                      .fontSize(12)
+                      .fontColor(Theme.COLOR_TEXT_TERTIARY)
                   }
                 }
               }
-              .padding({ left: 24, right: 24 })
+              .padding({ left: 20, right: 20 })
+              .justifyContent(FlexAlign.Center)
 
-              Button('Start Focus Session')
-                .width('100%')
-                .height(56)
+              // 启动按钮
+              Button('开始专注')
+                .width('90%')
+                .height(52)
                 .fontSize(16)
                 .fontWeight(FontWeight.Medium)
                 .fontColor(Color.White)
-                .backgroundColor('#2F54EB')
-                .borderRadius(28)
-                .shadow({ radius: 12, color: '#2F54EB40', offsetX: 0, offsetY: 4 })
+                .backgroundColor(Theme.COLOR_PRIMARY)
+                .borderRadius(26)
+                .shadow({ radius: 16, color: '#2563EB30', offsetX: 0, offsetY: 4 })
                 .onClick(() => {
                   this.startSession()
                 })
@@ -746,55 +779,55 @@ struct FocusPage {
             .width('100%')
             .padding({ left: 16, right: 16 })
           } else if (this.focusState.isBreaking) {
-            Button('End Break')
-              .width('100%')
-              .height(56)
+            Button('结束休息')
+              .width('90%')
+              .height(52)
               .fontSize(16)
               .fontWeight(FontWeight.Medium)
               .fontColor(Color.White)
-              .backgroundColor('#2F54EB')
-              .borderRadius(28)
-              .shadow({ radius: 12, color: '#2F54EB40', offsetX: 0, offsetY: 4 })
+              .backgroundColor(Theme.COLOR_WARNING)
+              .borderRadius(26)
+              .shadow({ radius: 16, color: '#F9731630', offsetX: 0, offsetY: 4 })
               .onClick(() => {
                 this.onFinishBreak()
               })
-              .padding({ left: 16, right: 16 })
           } else {
-            Column({ space: 12 }) {
+            Column({ space: 16 }) {
               Row({ space: 12 }) {
+                // Rest 按钮
                 Button({ type: ButtonType.Circle }) {
-                  Text('Rest')
-                    .fontSize(14)
+                  Text('☕').fontSize(20)
                 }
-                .width(56)
-                .height(56)
-                .backgroundColor('#F3F4F6')
+                .width(52)
+                .height(52)
+                .backgroundColor(Theme.COLOR_BACKGROUND)
                 .onClick(() => {
                   this.onStartBreak()
                 })
 
+                // Pause 按钮
                 Button({ type: ButtonType.Circle }) {
-                  Text('Pause')
-                    .fontSize(14)
+                  Text('⏸️').fontSize(18)
                 }
-                .width(56)
-                .height(56)
-                .backgroundColor('#F3F4F6')
+                .width(52)
+                .height(52)
+                .backgroundColor(Theme.COLOR_BACKGROUND)
                 .onClick(() => {
                   if (this.isRunning()) {
                     this.onPause()
                   }
                 })
 
-                Button('Complete')
+                // Complete 按钮
+                Button('完成')
                   .layoutWeight(1)
-                  .height(56)
-                  .fontSize(16)
+                  .height(52)
+                  .fontSize(15)
                   .fontWeight(FontWeight.Medium)
                   .fontColor(Color.White)
-                  .backgroundColor('#2F54EB')
-                  .borderRadius(28)
-                  .shadow({ radius: 12, color: '#2F54EB40', offsetX: 0, offsetY: 4 })
+                  .backgroundColor(Theme.COLOR_PRIMARY)
+                  .borderRadius(26)
+                  .shadow({ radius: 12, color: '#2563EB30', offsetX: 0, offsetY: 4 })
                   .onClick(() => {
                     this.onFinish()
                   })
@@ -804,66 +837,75 @@ struct FocusPage {
             .padding({ left: 16, right: 16 })
           }
 
-          Column() {
-            Row({ space: 16 }) {
-              Column() {
-                Text('Rest Count')
-                  .fontSize(13)
-                  .fontColor('#6B7280')
-                Text(this.getRestCount().toString())
-                  .fontSize(16)
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor('#111827')
-              }
-              .layoutWeight(1)
-
-              Column() {
-                Text('Rest Time')
-                  .fontSize(13)
-                  .fontColor('#6B7280')
-                Text(this.formatTime(this.getTotalRestTime()))
-                  .fontSize(16)
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor('#111827')
-              }
-              .layoutWeight(1)
-            }
-          }
-          .width('100%')
-          .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-          .backgroundColor(Color.White)
-          .borderRadius(14)
-          .shadow({ radius: 6, color: '#11182710', offsetX: 0, offsetY: 2 })
-
-          Column() {
+          // 统计卡片 - Rest Count 和 Rest Time
+          Row() {
             Row({ space: 8 }) {
-              Text('Focus sessions')
-                .fontSize(15)
-                .fontColor('#111827')
-              Text(this.sessionDetails.length.toString())
-                .fontSize(15)
-                .fontColor('#2F54EB')
-              Blank()
-              Button('View Detail')
+              Text('休息次数:')
                 .fontSize(14)
-                .height(32)
-                .backgroundColor('#E6F0FF')
-                .fontColor('#2F54EB')
-                .borderRadius(16)
-                .onClick(() => {
-                  this.openSessionDetails()
-                })
+                .fontColor(Theme.COLOR_TEXT_SECONDARY)
+              Text(this.getRestCount().toString())
+                .fontSize(14)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(Theme.COLOR_TEXT_PRIMARY)
             }
+            .layoutWeight(1)
+            .justifyContent(FlexAlign.Center)
+
+            Divider()
+              .vertical(true)
+              .height(20)
+              .color(Theme.COLOR_BORDER)
+
+            Row({ space: 8 }) {
+              Text('休息时长:')
+                .fontSize(14)
+                .fontColor(Theme.COLOR_TEXT_SECONDARY)
+              Text(this.formatTime(this.getTotalRestTime()))
+                .fontSize(14)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(Theme.COLOR_TEXT_PRIMARY)
+            }
+            .layoutWeight(1)
+            .justifyContent(FlexAlign.Center)
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, top: 14, bottom: 14 })
+          .margin({ left: 16, right: 16 })
+          .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+          .borderRadius(14)
+          .shadow({ radius: 4, color: '#0000000A', offsetX: 0, offsetY: 2 })
+
+          // Focus Sessions 卡片
+          Row({ space: 8 }) {
+            Text('专注次数:')
+              .fontSize(14)
+              .fontColor(Theme.COLOR_TEXT_PRIMARY)
+            Text(this.sessionDetails.length.toString())
+              .fontSize(14)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(Theme.COLOR_PRIMARY)
+            Blank()
+            Button('查看详情')
+              .fontSize(13)
+              .height(32)
+              .backgroundColor(Theme.COLOR_PRIMARY_BG)
+              .fontColor(Theme.COLOR_PRIMARY)
+              .borderRadius(16)
+              .onClick(() => {
+                this.openSessionDetails()
+              })
           }
           .width('100%')
           .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-          .backgroundColor(Color.White)
+          .margin({ left: 16, right: 16 })
+          .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
           .borderRadius(14)
-          .shadow({ radius: 6, color: '#11182710', offsetX: 0, offsetY: 2 })
+          .shadow({ radius: 4, color: '#0000000A', offsetX: 0, offsetY: 2 })
         }
         .layoutWeight(1)
-        .backgroundColor('#F7F8FA')
+        .backgroundColor(Theme.COLOR_BACKGROUND)
         .width('100%')
+        .padding({ left: 16, right: 16, bottom: 24 })
       }
       .width('100%')
       .height('100%')
@@ -913,17 +955,17 @@ struct FocusPage {
     .position({ x: 0, y: 0 })
 
     Column({ space: 12 }) {
-      Text('Rest time')
+      Text('休息时间到了')
         .fontSize(20)
         .fontWeight(FontWeight.Bold)
         .fontColor('#111827')
 
-      Text('Your rest interval is up. Start a rest or skip it.')
+      Text('休息间隔已到，开始休息或跳过。')
         .fontSize(14)
         .fontColor('#6B7280')
 
       Row({ space: 12 }) {
-        Button('Skip Rest')
+        Button('跳过休息')
           .layoutWeight(1)
           .height(48)
           .backgroundColor('#F3F4F6')
@@ -936,7 +978,7 @@ struct FocusPage {
             this.resetNextRestCountdown()
           })
 
-        Button('Start Rest')
+        Button('开始休息')
           .layoutWeight(1)
           .height(48)
           .backgroundColor('#2F54EB')
@@ -969,16 +1011,16 @@ struct FocusPage {
     .position({ x: 0, y: 0 })
 
     Column({ space: 12 }) {
-      Text('Rest finished')
+      Text('休息结束')
         .fontSize(20)
         .fontWeight(FontWeight.Bold)
         .fontColor('#111827')
 
-      Text('Tap confirm to resume focus.')
+      Text('点击确认继续专注。')
         .fontSize(14)
         .fontColor('#6B7280')
 
-      Button('Confirm')
+      Button('确认')
         .width('100%')
         .height(48)
         .backgroundColor('#2F54EB')
@@ -1012,12 +1054,12 @@ struct FocusPage {
     .position({ x: 0, y: 0 })
 
     Column({ space: 12 }) {
-      Text('Pause Task')
+      Text('暂停任务')
         .fontSize(20)
         .fontWeight(FontWeight.Bold)
         .fontColor('#111827')
 
-      Text('Pausing will end and save this focus session.')
+      Text('暂停将结束并保存此次专注。')
         .fontSize(14)
         .fontColor('#6B7280')
 
@@ -1027,13 +1069,13 @@ struct FocusPage {
           .onChange((checked: boolean) => {
             this.neverShowPauseWarning = checked
           })
-        Text("Don't show this again")
+        Text('不再显示')
           .fontSize(12)
           .fontColor('#4B5563')
       }
 
       Row({ space: 12 }) {
-        Button('Cancel')
+        Button('取消')
           .layoutWeight(1)
           .height(48)
           .backgroundColor('#F3F4F6')
@@ -1043,7 +1085,7 @@ struct FocusPage {
             this.showPauseWarning = false
           })
 
-        Button('Pause & Save')
+        Button('暂停并保存')
           .layoutWeight(1)
           .height(48)
           .backgroundColor('#EF4444')
@@ -1079,17 +1121,17 @@ struct FocusPage {
     .position({ x: 0, y: 0 })
 
     Column({ space: 12 }) {
-      Text('Leave Task')
+      Text('离开任务')
         .fontSize(20)
         .fontWeight(FontWeight.Bold)
         .fontColor('#111827')
 
-      Text('Leaving will pause and save the current session.')
+      Text('离开将暂停并保存当前专注。')
         .fontSize(14)
         .fontColor('#6B7280')
 
       Row({ space: 12 }) {
-        Button('Cancel')
+        Button('取消')
           .layoutWeight(1)
           .height(48)
           .backgroundColor('#F3F4F6')
@@ -1099,7 +1141,7 @@ struct FocusPage {
             this.showLeaveWarning = false
           })
 
-        Button('Leave')
+        Button('离开')
           .layoutWeight(1)
           .height(48)
           .backgroundColor('#EF4444')
@@ -1137,16 +1179,16 @@ struct FocusPage {
     .position({ x: 0, y: 0 })
 
     Column({ space: 12 }) {
-      Text('Active Task Warning')
+      Text('活动任务警告')
         .fontSize(20)
         .fontWeight(FontWeight.Bold)
         .fontColor('#111827')
 
-      Text('Another task is currently active. Please pause or complete it before starting a new session.')
+      Text('另一个任务正在进行中。请先暂停或完成它再开始新的专注。')
         .fontSize(14)
         .fontColor('#6B7280')
 
-      Button('OK')
+      Button('确定')
         .width('100%')
         .height(48)
         .backgroundColor('#2F54EB')
@@ -1180,7 +1222,7 @@ struct FocusPage {
     .position({ x: 0, y: 0 })
 
     Column({ space: 12 }) {
-      Text('Task Load Error')
+      Text('任务加载错误')
         .fontSize(20)
         .fontWeight(FontWeight.Bold)
         .fontColor('#111827')
@@ -1189,7 +1231,7 @@ struct FocusPage {
         .fontSize(14)
         .fontColor('#6B7280')
 
-      Button('OK')
+      Button('确定')
         .width('100%')
         .height(48)
         .backgroundColor('#2F54EB')
@@ -1227,12 +1269,12 @@ struct FocusPage {
 
     Column({ space: 12 }) {
       Row() {
-        Text('Session Details')
+        Text('专注详情')
           .fontSize(18)
           .fontWeight(FontWeight.Medium)
           .fontColor('#111827')
         Blank()
-        Button('Close')
+        Button('关闭')
           .fontSize(14)
           .height(32)
           .backgroundColor('#F3F4F6')
@@ -1244,7 +1286,7 @@ struct FocusPage {
       }
 
       if (this.sessionDetails.length === 0) {
-        Text('No completed sessions yet.')
+        Text('暂无已完成的专注。')
           .fontSize(13)
           .fontColor('#6B7280')
       } else {
@@ -1256,10 +1298,10 @@ struct FocusPage {
                   .fontSize(13)
                   .fontColor('#6B7280')
                       Row({ space: 12 }) {
-                        Text(`Focus: ${item.status === SessionStatus.FINISHED ? this.formatTime(item.focusDuration) : 'In progress'}`)
+                        Text(`专注: ${item.status === SessionStatus.FINISHED ? this.formatTime(item.focusDuration) : '进行中'}`)
                           .fontSize(14)
                           .fontColor('#111827')
-                        Text(`Rest: ${item.status === SessionStatus.FINISHED ? this.formatTime(item.restDuration) : 'In progress'}`)
+                        Text(`休息: ${item.status === SessionStatus.FINISHED ? this.formatTime(item.restDuration) : '进行中'}`)
                           .fontSize(14)
                           .fontColor('#111827')
                       }
