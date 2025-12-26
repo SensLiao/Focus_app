@@ -1,5 +1,5 @@
 /**
- * 底部导航栏组件 - 基于 Sample_Frontend BottomNav 设计
+ * 底部导航栏组件 - 精致现代风格
  */
 
 import router from '@ohos.router'
@@ -16,39 +16,54 @@ export struct BottomNav {
   build() {
     Row() {
       // History 按钮 (左侧)
-      Column({ space: 2 }) {
-        Text('📊')
-          .fontSize(22)
+      Column({ space: 4 }) {
+        Column() {
+          Text('📊')
+            .fontSize(24)
+        }
+        .width(48)
+        .height(32)
+        .justifyContent(FlexAlign.Center)
+        .borderRadius(16)
+        .backgroundColor(this.currentIndex === 1 ? Theme.COLOR_PRIMARY_BG : Color.Transparent)
+        
         Text('历史')
-          .fontSize(11)
+          .fontSize(Theme.FONT_SIZE_SMALL)
+          .fontWeight(this.currentIndex === 1 ? FontWeight.Bold : FontWeight.Medium)
           .fontColor(this.currentIndex === 1 ? Theme.COLOR_PRIMARY : Theme.COLOR_TEXT_TERTIARY)
       }
       .layoutWeight(1)
       .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Center)
-      .padding({ top: 10, bottom: 10 })
-      .borderRadius(12)
-      .backgroundColor(this.currentIndex === 1 ? Theme.COLOR_PRIMARY_BG : Color.Transparent)
+      .padding({ top: 8, bottom: 8 })
       .onClick(() => {
         if (this.currentIndex !== 1) {
           router.replaceUrl({ url: 'pages/HistoryPage' })
         }
       })
 
-      // Home 按钮 (中间)
-      Column({ space: 2 }) {
-        Text('🏠')
-          .fontSize(22)
+      // Home 按钮 (中间) - 突出显示
+      Column({ space: 4 }) {
+        Column() {
+          Text('🏠')
+            .fontSize(26)
+        }
+        .width(56)
+        .height(36)
+        .justifyContent(FlexAlign.Center)
+        .borderRadius(18)
+        .backgroundColor(this.currentIndex === 0 ? Theme.COLOR_PRIMARY : Theme.COLOR_SOFT_PURPLE)
+        .shadow(this.currentIndex === 0 ? Theme.SHADOW_GLOW : Theme.SHADOW_SMALL)
+        
         Text('首页')
-          .fontSize(11)
+          .fontSize(Theme.FONT_SIZE_SMALL)
+          .fontWeight(this.currentIndex === 0 ? FontWeight.Bold : FontWeight.Medium)
           .fontColor(this.currentIndex === 0 ? Theme.COLOR_PRIMARY : Theme.COLOR_TEXT_TERTIARY)
       }
       .layoutWeight(1)
       .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Center)
-      .padding({ top: 10, bottom: 10 })
-      .borderRadius(12)
-      .backgroundColor(this.currentIndex === 0 ? Theme.COLOR_PRIMARY_BG : Color.Transparent)
+      .padding({ top: 6, bottom: 8 })
       .onClick(() => {
         if (this.currentIndex !== 0) {
           router.replaceUrl({ url: 'pages/Index' })
@@ -56,19 +71,26 @@ export struct BottomNav {
       })
 
       // Settings 按钮 (右侧)
-      Column({ space: 2 }) {
-        Text('⚙️')
-          .fontSize(22)
+      Column({ space: 4 }) {
+        Column() {
+          Text('⚙️')
+            .fontSize(24)
+        }
+        .width(48)
+        .height(32)
+        .justifyContent(FlexAlign.Center)
+        .borderRadius(16)
+        .backgroundColor(this.currentIndex === 2 ? Theme.COLOR_PRIMARY_BG : Color.Transparent)
+        
         Text('设置')
-          .fontSize(11)
+          .fontSize(Theme.FONT_SIZE_SMALL)
+          .fontWeight(this.currentIndex === 2 ? FontWeight.Bold : FontWeight.Medium)
           .fontColor(this.currentIndex === 2 ? Theme.COLOR_PRIMARY : Theme.COLOR_TEXT_TERTIARY)
       }
       .layoutWeight(1)
       .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Center)
-      .padding({ top: 10, bottom: 10 })
-      .borderRadius(12)
-      .backgroundColor(this.currentIndex === 2 ? Theme.COLOR_PRIMARY_BG : Color.Transparent)
+      .padding({ top: 8, bottom: 8 })
       .onClick(() => {
         if (this.currentIndex !== 2) {
           router.replaceUrl({ url: 'pages/SettingsPage' })
@@ -76,12 +98,18 @@ export struct BottomNav {
       })
     }
     .width('100%')
-    .height(64)
-    .padding({ left: 8, right: 8 })
+    .height(72)
+    .padding({ left: 12, right: 12 })
     .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
     .border({
       width: { top: 1 },
       color: Theme.COLOR_BORDER
+    })
+    .shadow({
+      radius: 8,
+      color: '#00000008',
+      offsetX: 0,
+      offsetY: -2
     })
   }
 }

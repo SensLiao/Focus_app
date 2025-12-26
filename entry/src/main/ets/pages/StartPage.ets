@@ -1,5 +1,5 @@
 /**
- * Task creation / edit page - adapted to sample_frontend StartPage
+ * Task creation / edit page - 精致现代风格
  */
 import router from '@ohos.router'
 import promptAction from '@ohos.promptAction'
@@ -7,6 +7,7 @@ import { TaskStore } from '../store/taskStore'
 import { FocusStore } from '../store/focusStore'
 import { SessionType } from '../model/FocusSession'
 import { Theme } from '../common/theme'
+import { SuccessAnimation } from '../components/SuccessAnimation'
 
 interface RouterParams {
   taskId?: number
@@ -20,6 +21,10 @@ struct StartPage {
   @State taskDescription: string = ''
   @State loading: boolean = true
   @State saving: boolean = false
+  // 动画相关状态
+  @State showSuccessAnimation: boolean = false
+  @State headerOpacity: number = 0
+  @State contentOpacity: number = 0
 
   async aboutToAppear() {
     TaskStore.init(getContext(this))
@@ -35,135 +40,213 @@ struct StartPage {
       }
     }
     this.loading = false
+
+    // 入场动画
+    setTimeout(() => {
+      this.headerOpacity = 1
+    }, 100)
+    setTimeout(() => {
+      this.contentOpacity = 1
+    }, 200)
   }
 
   build() {
-    Column() {
-      // 顶部导航栏
-      Row({ space: 12 }) {
-        Text('←')
-          .fontSize(24)
-          .fontColor(Theme.COLOR_TEXT_SECONDARY)
+    Stack() {
+      Column() {
+        // 顶部导航栏
+        Row({ space: 16 }) {
+          Button({ type: ButtonType.Circle }) {
+            Text('←')
+              .fontSize(Theme.FONT_SIZE_LARGE)
+              .fontColor(Theme.COLOR_TEXT_SECONDARY)
+          }
+          .width(44)
+          .height(44)
+          .backgroundColor(Theme.COLOR_BACKGROUND)
           .onClick(() => {
             router.back()
           })
 
-        Text(this.taskId !== null ? 'Edit Task' : 'New Task')
-          .fontSize(20)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(Theme.COLOR_TEXT_PRIMARY)
-      }
-      .width('100%')
-      .height(60)
-      .padding({ left: 16, right: 16 })
-      .alignItems(VerticalAlign.Center)
-      .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-      .border({
-        width: { bottom: 1 },
-        color: Theme.COLOR_BORDER
-      })
-
-      if (this.loading) {
-        Column() {
-          Text('加载中...')
-            .fontSize(Theme.FONT_SIZE_MEDIUM)
-            .fontColor(Theme.COLOR_TEXT_SECONDARY)
+          Text(this.taskId !== null ? '编辑任务' : '新建任务')
+            .fontSize(Theme.FONT_SIZE_LARGE)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(Theme.COLOR_TEXT_PRIMARY)
         }
-        .layoutWeight(1)
-        .justifyContent(FlexAlign.Center)
-      } else {
-        Column({ space: 20 }) {
-          // Task Name 输入框
-          Column({ space: 8 }) {
-            Text('任务名称')
-              .fontSize(14)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(Theme.COLOR_TEXT_PRIMARY)
-            TextInput({ placeholder: '输入任务名称', text: this.taskTitle })
-              .width('100%')
-              .height(52)
-              .borderRadius(14)
-              .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-              .border({ width: 1, color: Theme.COLOR_BORDER })
-              .padding({ left: 16, right: 16 })
-              .fontSize(15)
-              .onChange((value: string) => {
-                this.taskTitle = value
-              })
+        .width('100%')
+        .padding({ left: 16, right: 20, top: 12, bottom: 12 })
+        .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+        .border({
+          width: { bottom: 1 },
+          color: Theme.COLOR_BORDER
+        })
+        .opacity(this.headerOpacity)
+        .animation({
+          duration: Theme.ANIMATION_NORMAL,
+          curve: Curve.EaseOut
+        })
+
+        if (this.loading) {
+          Column() {
+            LoadingProgress()
+              .width(48)
+              .height(48)
+              .color(Theme.COLOR_PRIMARY)
+            Text('加载中...')
+              .fontSize(Theme.FONT_SIZE_MEDIUM)
+              .fontColor(Theme.COLOR_TEXT_SECONDARY)
+              .margin({ top: 16 })
           }
-          .alignItems(HorizontalAlign.Start)
+          .layoutWeight(1)
+          .justifyContent(FlexAlign.Center)
+        } else {
+          Column({ space: 24 }) {
+            // 任务名称输入框
+            Column({ space: 10 }) {
+              Row({ space: 6 }) {
+                Text('📝')
+                  .fontSize(Theme.FONT_SIZE_MEDIUM)
+                Text('任务名称')
+                  .fontSize(Theme.FONT_SIZE_MEDIUM)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(Theme.COLOR_TEXT_PRIMARY)
+                Text('*')
+                  .fontSize(Theme.FONT_SIZE_MEDIUM)
+                  .fontColor(Theme.COLOR_ERROR)
+              }
 
-          // Task Description 输入框
-          Column({ space: 8 }) {
-            Text('任务描述')
-              .fontSize(14)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(Theme.COLOR_TEXT_PRIMARY)
-            TextArea({ placeholder: '输入任务描述（可选）', text: this.taskDescription })
-              .width('100%')
-              .height(140)
-              .borderRadius(14)
-              .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-              .border({ width: 1, color: Theme.COLOR_BORDER })
-              .padding({ left: 16, right: 16, top: 14, bottom: 14 })
-              .fontSize(15)
-              .onChange((value: string) => {
-                this.taskDescription = value
-              })
-          }
-          .alignItems(HorizontalAlign.Start)
-
-          Blank()
-
-          // 按钮区域
-          Column({ space: 12 }) {
-            Button(this.taskId !== null ? '更新' : '创建')
-              .width('100%')
-              .height(52)
-              .fontSize(16)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(Color.White)
-              .backgroundColor(this.taskTitle.trim().length > 0 ? Theme.COLOR_PRIMARY : Theme.COLOR_TEXT_LIGHT)
-              .borderRadius(26)
-              .enabled(!this.saving && this.taskTitle.trim().length > 0)
-              .shadow({
-                radius: this.taskTitle.trim().length > 0 ? 12 : 0,
-                color: this.taskTitle.trim().length > 0 ? '#2563EB30' : '#00000000',
-                offsetX: 0,
-                offsetY: 4
-              })
-              .onClick(() => {
-                if (this.taskId !== null) {
-                  this.saveTask()
-                } else {
-                  this.createTask()
-                }
-              })
-
-            if (this.taskId === null) {
-              Button('Start without a task')
+              TextInput({ placeholder: '给你的任务起个名字...', text: this.taskTitle })
                 .width('100%')
-                .height(48)
-                .fontSize(15)
-                .fontColor(Theme.COLOR_TEXT_SECONDARY)
-                .backgroundColor(Theme.COLOR_BACKGROUND)
-                .borderRadius(24)
-                .enabled(!this.saving)
-                .onClick(() => {
-                  this.startWithoutTask()
+                .height(56)
+                .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
+                .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+                .border({ width: 1.5, color: this.taskTitle.trim().length > 0 ? Theme.COLOR_PRIMARY : Theme.COLOR_BORDER })
+                .padding({ left: 18, right: 18 })
+                .fontSize(Theme.FONT_SIZE_MEDIUM)
+                .onChange((value: string) => {
+                  this.taskTitle = value
                 })
             }
+            .alignItems(HorizontalAlign.Start)
+
+            // 任务描述输入框
+            Column({ space: 10 }) {
+              Row({ space: 6 }) {
+                Text('📋')
+                  .fontSize(Theme.FONT_SIZE_MEDIUM)
+                Text('任务描述')
+                  .fontSize(Theme.FONT_SIZE_MEDIUM)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(Theme.COLOR_TEXT_PRIMARY)
+                Text('(可选)')
+                  .fontSize(Theme.FONT_SIZE_SMALL)
+                  .fontColor(Theme.COLOR_TEXT_TERTIARY)
+              }
+
+              TextArea({ placeholder: '添加一些描述，帮助你更好地专注...', text: this.taskDescription })
+                .width('100%')
+                .height(140)
+                .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
+                .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+                .border({ width: 1.5, color: Theme.COLOR_BORDER })
+                .padding({ left: 18, right: 18, top: 16, bottom: 16 })
+                .fontSize(Theme.FONT_SIZE_MEDIUM)
+                .onChange((value: string) => {
+                  this.taskDescription = value
+                })
+            }
+            .alignItems(HorizontalAlign.Start)
+
+            // 提示卡片
+            Row({ space: 14 }) {
+              Column() {
+                Text('💡')
+                  .fontSize(24)
+              }
+              .width(48)
+              .height(48)
+              .borderRadius(24)
+              .backgroundColor(Theme.COLOR_PRIMARY_BG)
+              .justifyContent(FlexAlign.Center)
+
+              Column({ space: 4 }) {
+                Text('专注小贴士')
+                  .fontSize(Theme.FONT_SIZE_MEDIUM)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(Theme.COLOR_TEXT_PRIMARY)
+                Text('建议每次专注 25 分钟，然后休息 5 分钟')
+                  .fontSize(Theme.FONT_SIZE_SMALL)
+                  .fontColor(Theme.COLOR_TEXT_SECONDARY)
+              }
+              .layoutWeight(1)
+              .alignItems(HorizontalAlign.Start)
+            }
+            .width('100%')
+            .padding(16)
+            .backgroundColor(Theme.COLOR_SOFT_PURPLE)
+            .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
+
+            Blank()
+
+            // 按钮区域
+            Column({ space: 14 }) {
+              Button(this.taskId !== null ? '保存更改' : '创建并开始专注')
+                .width('100%')
+                .height(58)
+                .fontSize(Theme.FONT_SIZE_LARGE)
+                .fontWeight(FontWeight.Bold)
+                .fontColor(Color.White)
+                .backgroundColor(this.taskTitle.trim().length > 0 ? Theme.COLOR_PRIMARY : Theme.COLOR_TEXT_LIGHT)
+                .borderRadius(Theme.BORDER_RADIUS_XLARGE)
+                .enabled(!this.saving && this.taskTitle.trim().length > 0)
+                .shadow(this.taskTitle.trim().length > 0 ? Theme.SHADOW_GLOW : Theme.SHADOW_SMALL)
+                .onClick(() => {
+                  if (this.taskId !== null) {
+                    this.saveTask()
+                  } else {
+                    this.createTask()
+                  }
+                })
+
+              if (this.taskId === null) {
+                Button('无任务专注')
+                  .width('100%')
+                  .height(52)
+                  .fontSize(Theme.FONT_SIZE_MEDIUM)
+                  .fontColor(Theme.COLOR_TEXT_SECONDARY)
+                  .backgroundColor(Theme.COLOR_BACKGROUND)
+                  .borderRadius(Theme.BORDER_RADIUS_LARGE)
+                  .border({ width: 1, color: Theme.COLOR_BORDER })
+                  .enabled(!this.saving)
+                  .onClick(() => {
+                    this.startWithoutTask()
+                  })
+              }
+            }
+            .padding({ bottom: 20 })
           }
-          .padding({ bottom: 16 })
+          .padding({ left: 22, right: 22, top: 28, bottom: 28 })
+          .layoutWeight(1)
+          .backgroundColor(Theme.COLOR_BACKGROUND)
+          .opacity(this.contentOpacity)
+          .animation({
+            duration: Theme.ANIMATION_NORMAL,
+            curve: Curve.EaseOut
+          })
         }
-        .padding({ left: 20, right: 20, top: 24, bottom: 24 })
-        .layoutWeight(1)
-        .backgroundColor(Theme.COLOR_BACKGROUND)
       }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(Theme.COLOR_BACKGROUND)
+
+      // 成功动画
+      SuccessAnimation({
+        visible: $showSuccessAnimation,
+        type: 'create',
+        message: `任务 "${this.taskTitle}" 已创建`
+      })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Theme.COLOR_BACKGROUND)
   }
 
   private async saveTask() {
@@ -171,7 +254,7 @@ struct StartPage {
       return
     }
     if (this.taskTitle.trim() === '') {
-      promptAction.showToast({ message: 'Please enter task name' })
+      promptAction.showToast({ message: '请输入任务名称' })
       return
     }
     this.saving = true
@@ -181,16 +264,16 @@ struct StartPage {
     })
     this.saving = false
     if (result.ok) {
-      promptAction.showToast({ message: 'Task updated' })
+      promptAction.showToast({ message: '任务已更新' })
       router.back()
     } else {
-      promptAction.showToast({ message: result.message ?? 'Update failed' })
+      promptAction.showToast({ message: result.message ?? '更新失败' })
     }
   }
 
   private async createTask() {
     if (this.taskTitle.trim() === '') {
-      promptAction.showToast({ message: 'Please enter task name' })
+      promptAction.showToast({ message: '请输入任务名称' })
       return
     }
     this.saving = true
@@ -200,14 +283,19 @@ struct StartPage {
     })
     if (!createResult.ok || createResult.data === undefined) {
       this.saving = false
-      promptAction.showToast({ message: createResult.message ?? 'Create failed' })
+      promptAction.showToast({ message: createResult.message ?? '创建失败' })
       return
     }
 
-    this.saving = false
-
-    const taskId = createResult.data
-    router.replaceUrl({ url: 'pages/FocusPage', params: { pendingTaskId: taskId } })
+    // 显示成功动画
+    this.showSuccessAnimation = true
+    
+    // 延迟跳转，让用户看到动画
+    setTimeout(() => {
+      this.saving = false
+      const taskId = createResult.data
+      router.replaceUrl({ url: 'pages/FocusPage', params: { pendingTaskId: taskId } })
+    }, 1800)
   }
 
   private async startWithoutTask() {
@@ -215,7 +303,7 @@ struct StartPage {
     if (focusResult.ok) {
       router.replaceUrl({ url: 'pages/FocusPage', params: { startAnonymous: true } })
     } else {
-      promptAction.showToast({ message: focusResult.message ?? 'Unable to start focus' })
+      promptAction.showToast({ message: focusResult.message ?? '无法开始专注' })
     }
   }
 }
