@@ -1,5 +1,5 @@
 /**
- * Timer page - adapted to sample_frontend layout & flow
+ * Timer page - 精致现代风格 (Inspired by Flocus)
  */
 import router from '@ohos.router'
 import promptAction from '@ohos.promptAction'
@@ -14,6 +14,7 @@ import { SettingsService } from '../services/SettingsService'
 import { AppLifecycleService } from '../services/AppLifecycleService'
 import { NotificationService } from '../services/NotificationService'
 import { Theme } from '../common/theme'
+import { SuccessAnimation } from '../components/SuccessAnimation'
 
 interface SessionSummary {
   id: number
@@ -59,10 +60,16 @@ struct FocusPage {
   @State showBreakEndPrompt: boolean = false
   @StorageLink('breakEndPromptPending') pendingBreakEndPrompt: boolean = false
   @StorageLink('startRestPromptPending') pendingStartRestPrompt: boolean = false
-  @State allowRest: boolean = true
   @State restIntervalMs: number = 0
   @State restDurationMs: number = 0
   @State nextRestDueAtMs: number = 0
+  // 动画相关状态
+  @State showSuccessAnimation: boolean = false
+  @State successAnimationType: 'create' | 'complete' = 'complete'
+  @State successMessage: string = ''
+  @State timerScale: number = 1
+  @State headerOpacity: number = 0
+  @State contentOpacity: number = 0
   private timerInterval: number = -1
   private restPromptTimeoutId: number = -1
   private lifecycleListener: ((event: 'foreground' | 'background' | 'destroy') => void) | null = null
@@ -142,6 +149,14 @@ struct FocusPage {
       }
     }
     AppLifecycleService.register(this.lifecycleListener)
+
+    // 入场动画
+    setTimeout(() => {
+      this.headerOpacity = 1
+    }, 100)
+    setTimeout(() => {
+      this.contentOpacity = 1
+    }, 200)
   }
 
   aboutToDisappear() {
@@ -224,15 +239,6 @@ struct FocusPage {
 
   private loadRestSettings() {
     const settings = SettingsService.getSettings()
-    this.allowRest = settings.restEnabled
-    if (!this.allowRest) {
-      this.restIntervalMs = 0
-      this.restDurationMs = 0
-      this.showStartRestPrompt = false
-      this.pendingStartRestPrompt = false
-      void NotificationService.cancelRestInterval()
-      return
-    }
     this.restIntervalMs = Math.max(0, settings.defaultRestInterval) * 60 * 1000
     this.restDurationMs = Math.max(0, settings.defaultRestDuration) * 60 * 1000
   }
@@ -257,9 +263,6 @@ struct FocusPage {
   }
 
   private checkRestIntervalPrompt() {
-    if (!this.allowRest) {
-      return
-    }
     if (this.pendingStartRestPrompt && !this.showStartRestPrompt) {
       this.pendingStartRestPrompt = false
       this.showStartRestPrompt = true
@@ -392,7 +395,7 @@ struct FocusPage {
     }
   }
 
-  private async onStartBreak(autoEnd: boolean) {
+  private async onStartBreak() {
     this.handleModeTransition(true)
     if (this.restPromptTimeoutId !== -1) {
       clearTimeout(this.restPromptTimeoutId)
@@ -405,7 +408,7 @@ struct FocusPage {
       this.loadRestSettings()
     }
     const duration = this.restDurationMs
-    const result = await FocusStore.startBreak(duration, undefined, autoEnd)
+    const result = await FocusStore.startBreak(duration)
     if (result.ok) {
       promptAction.showToast({ message: 'Break started' })
       this.resetNextRestCountdown()
@@ -431,8 +434,17 @@ struct FocusPage {
   private async onFinish() {
     const result = await FocusStore.finishFocus()
     if (result.ok) {
-      promptAction.showToast({ message: 'Focus completed' })
-      router.back()
+      // 显示完成动画
+      this.successAnimationType = 'complete'
+      this.successMessage = `太棒了！完成了 ${this.formatTime(this.getElapsedMs())} 的专注`
+      this.showSuccessAnimation = true
+      
+      // 等待动画完成后返回
+      setTimeout(() => {
+        promptAction.showToast({ message: '专注完成' })
+        router.back()
+      }, 2000)
+      
       this.isIdle = true
       this.showBreakEndPrompt = false
       this.showStartRestPrompt = false
@@ -503,11 +515,8 @@ struct FocusPage {
       return this.formatTime(0)
     }
     if (this.focusState.isBreaking) {
-      if (this.focusState.breakAutoEnd) {
-        const remaining = Math.max(0, this.focusState.breakDuration - this.focusState.breakElapsedTime)
-        return this.formatTime(remaining)
-      }
-      return this.formatTime(this.focusState.breakElapsedTime)
+      const remaining = Math.max(0, this.focusState.breakDuration - this.focusState.breakElapsedTime)
+      return this.formatTime(remaining)
     }
     const remaining = this.focusState.remainingTime > 0 ? this.focusState.remainingTime : this.getElapsedMs()
     return this.formatTime(remaining)
@@ -591,203 +600,228 @@ struct FocusPage {
   build() {
     Stack() {
       Column() {
-        Row({ space: 12 }) {
-          Text('←')
-            .fontSize(24)
-            .fontColor(Theme.COLOR_TEXT_SECONDARY)
-            .onClick(() => {
-              this.goBack()
-            })
-          Text(this.taskTitle)
-            .fontSize(20)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(Theme.COLOR_TEXT_PRIMARY)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        // 顶部导航栏 - 更精致
+        Row({ space: 16 }) {
+          Button({ type: ButtonType.Circle }) {
+            Text('←')
+              .fontSize(Theme.FONT_SIZE_LARGE)
+              .fontColor(Theme.COLOR_TEXT_SECONDARY)
+          }
+          .width(44)
+          .height(44)
+          .backgroundColor(Theme.COLOR_BACKGROUND)
+          .onClick(() => {
+            this.goBack()
+          })
+
+          Column({ space: 2 }) {
+            Text(this.taskTitle || '专注时间')
+              .fontSize(Theme.FONT_SIZE_LARGE)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(Theme.COLOR_TEXT_PRIMARY)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+            if (this.displayIsBreaking) {
+              Text('休息时间')
+                .fontSize(Theme.FONT_SIZE_SMALL)
+                .fontColor(Theme.COLOR_WARNING)
+            }
+          }
+          .layoutWeight(1)
+          .alignItems(HorizontalAlign.Start)
         }
         .width('100%')
-        .height(60)
-        .padding({ left: 16, right: 16 })
-        .alignItems(VerticalAlign.Center)
+        .padding({ left: 16, right: 20, top: 12, bottom: 12 })
         .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
         .border({ width: { bottom: 1 }, color: Theme.COLOR_BORDER })
+        .opacity(this.headerOpacity)
+        .animation({
+          duration: Theme.ANIMATION_NORMAL,
+          curve: Curve.EaseOut
+        })
 
+        // 任务描述
         if (this.taskDescription !== '') {
           Column() {
-            Text('描述')
-              .fontSize(13)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(Theme.COLOR_TEXT_PRIMARY)
             Text(this.taskDescription)
-              .fontSize(13)
+              .fontSize(Theme.FONT_SIZE_SMALL)
               .fontColor(Theme.COLOR_TEXT_SECONDARY)
-              .margin({ top: 4 })
+              .maxLines(2)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
           }
           .width('100%')
-          .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-          .margin({ left: 16, right: 16, top: 12 })
+          .padding({ left: 20, right: 20, top: 14, bottom: 14 })
+          .margin({ left: 16, right: 16, top: 14 })
           .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-          .borderRadius(12)
-          .alignItems(HorizontalAlign.Start)
-          .shadow({
-            radius: 4,
-            color: '#0000000A',
-            offsetX: 0,
-            offsetY: 2
-          })
+          .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
+          .shadow(Theme.SHADOW_SMALL)
         }
 
-        Column({ space: 24 }) {
+        Column({ space: 28 }) {
+          // 超大计时器显示区域
           Column() {
             Stack() {
-              // 外层蓝紫色环
+              // 外层装饰环
               Circle()
-                .width(300)
-                .height(300)
+                .width(320)
+                .height(320)
                 .fill(Color.Transparent)
-                .stroke(this.displayIsBreaking ? '#FFE8D8' : '#E4E0F8')
-                .strokeWidth(20)
+                .stroke(this.displayIsBreaking ? '#FFF1E6' : Theme.COLOR_PRIMARY_BG)
+                .strokeWidth(24)
 
-              // 内层白色圆
+              // 中层进度环背景
               Circle()
-                .width(260)
-                .height(260)
-                .fill('#FFFFFF')
+                .width(280)
+                .height(280)
+                .fill(Color.Transparent)
+                .stroke(this.displayIsBreaking ? '#FFEDD5' : '#E9D5FF')
+                .strokeWidth(8)
 
+              // 进度环
               if (this.getProgress() > 0) {
                 Progress({
                   value: this.getProgress() * 100,
                   total: 100,
                   type: ProgressType.Ring
                 })
-                  .width(290)
-                  .height(290)
-                  .color(this.displayIsBreaking ? '#F97316' : '#3B82F6')
-                  .style({ strokeWidth: 6 })
+                  .width(280)
+                  .height(280)
+                  .color(this.displayIsBreaking ? Theme.COLOR_WARNING : Theme.COLOR_PRIMARY)
+                  .style({ strokeWidth: 8 })
               }
 
-              Column({ space: 4 }) {
-                Column({ space: 4 }) {
-                  if (this.displayIsBreaking) {
-                    Column({ space: 4 }) {
-                      Text('休息中')
-                        .fontSize(14)
-                        .fontColor(Theme.COLOR_WARNING)
-                      Text(this.getDisplayTime())
-                        .fontSize(48)
-                        .fontWeight(FontWeight.Medium)
-                        .fontColor(Theme.COLOR_TEXT_PRIMARY)
-                    }
-                  } else {
-                    Column({ space: 4 }) {
-                      Text('专注时间')
-                        .fontSize(14)
-                        .fontColor(Theme.COLOR_TEXT_SECONDARY)
-                      Text(this.getDisplayTime())
-                        .fontSize(48)
-                        .fontWeight(FontWeight.Medium)
-                        .fontColor(Theme.COLOR_TEXT_PRIMARY)
-                    }
-                  }
-                }
-                .opacity(this.isModeAnimating ? 0 : 1)
-                .animation({ duration: 300, curve: Curve.EaseInOut })
+              // 内层白色圆
+              Circle()
+                .width(240)
+                .height(240)
+                .fill(Theme.COLOR_CARD_BACKGROUND)
+                .shadow(Theme.SHADOW_MEDIUM)
 
-                if (this.displayIsBreaking) {
-                  Column({ space: 2 }) {
-                    Text(this.getSecondaryFocusInfo())
-                      .fontSize(12)
-                      .fontColor(Theme.COLOR_TEXT_TERTIARY)
-                    Text(`总专注: ${this.formatTime(this.completedFocusOffset + this.getElapsedMs())}`)
-                      .fontSize(12)
-                      .fontColor(Theme.COLOR_TEXT_TERTIARY)
-                  }
-                } else {
-                  Column({ space: 2 }) {
-                    if (this.allowRest && this.restIntervalMs > 0 && !this.viewingOtherTask) {
-                      Text(`下次休息: ${this.formatTime(this.getNextRestRemainingMs())}`)
-                        .fontSize(12)
-                        .fontColor(Theme.COLOR_TEXT_TERTIARY)
-                    } else {
-                      Text('')
-                        .fontSize(12)
-                        .fontColor(Theme.COLOR_TEXT_TERTIARY)
-                    }
-                    Text(`总专注: ${this.formatTime(this.completedFocusOffset + this.getElapsedMs())}`)
-                      .fontSize(12)
-                      .fontColor(Theme.COLOR_TEXT_TERTIARY)
+              // 时间和状态显示
+              Column({ space: 8 }) {
+                // 模式标签
+                Row({ space: 6 }) {
+                  Circle()
+                    .width(10)
+                    .height(10)
+                    .fill(this.displayIsBreaking ? Theme.COLOR_WARNING :
+                      (this.isRunning() ? Theme.COLOR_SUCCESS : Theme.COLOR_PRIMARY))
+                  Text(this.displayIsBreaking ? '休息中' :
+                    (this.isRunning() ? '专注中' : '准备开始'))
+                    .fontSize(Theme.FONT_SIZE_SMALL)
+                    .fontColor(this.displayIsBreaking ? Theme.COLOR_WARNING :
+                      (this.isRunning() ? Theme.COLOR_SUCCESS : Theme.COLOR_TEXT_SECONDARY))
+                }
+                .padding({ left: 14, right: 14, top: 6, bottom: 6 })
+                .backgroundColor(this.displayIsBreaking ? Theme.COLOR_WARNING_BG :
+                  (this.isRunning() ? Theme.COLOR_SUCCESS_BG : Theme.COLOR_BACKGROUND))
+                .borderRadius(Theme.BORDER_RADIUS_FULL)
+
+                // 超大时间数字
+                Text(this.getDisplayTime())
+                  .fontSize(Theme.FONT_SIZE_HERO)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor(Theme.COLOR_TEXT_PRIMARY)
+                  .opacity(this.isModeAnimating ? 0.3 : 1)
+                  .scale({ x: this.timerScale, y: this.timerScale })
+                  .animation({
+                    duration: Theme.ANIMATION_NORMAL,
+                    curve: Curve.EaseInOut
+                  })
+
+                // 辅助信息
+                Column({ space: 4 }) {
+                  Text(`总专注: ${this.formatTime(this.completedFocusOffset + this.getElapsedMs())}`)
+                    .fontSize(Theme.FONT_SIZE_SMALL)
+                    .fontColor(Theme.COLOR_TEXT_TERTIARY)
+
+                  if (!this.displayIsBreaking && this.restIntervalMs > 0 && !this.viewingOtherTask && this.isRunning()) {
+                    Text(`下次休息: ${this.formatTime(this.getNextRestRemainingMs())}`)
+                      .fontSize(Theme.FONT_SIZE_TINY)
+                      .fontColor(Theme.COLOR_TEXT_LIGHT)
                   }
                 }
               }
             }
-            .margin({ top: 20 })
-            .align(Alignment.Center)
+            .margin({ top: 24 })
           }
           .width('100%')
           .justifyContent(FlexAlign.Center)
+          .opacity(this.contentOpacity)
+          .animation({
+            duration: Theme.ANIMATION_SLOW,
+            curve: Curve.EaseOut
+          })
 
+          // 控制按钮区域
           if (this.isIdle || !this.focusState.currentSession) {
-            Column({ space: 16 }) {
+            Column({ space: 20 }) {
               // 倒计时模式切换
-              Row({ space: 8 }) {
-                Toggle({ type: ToggleType.Switch, isOn: this.isCountdownMode })
-                  .selectedColor(Theme.COLOR_PRIMARY)
-                  .width(44)
-                  .height(24)
-                  .onChange((isOn: boolean) => {
-                    this.isCountdownMode = isOn
-                  })
-                Text('倒计时模式')
-                  .fontSize(14)
-                  .fontColor(Theme.COLOR_TEXT_SECONDARY)
+              Row() {
+                Row({ space: 12 }) {
+                  Toggle({ type: ToggleType.Switch, isOn: this.isCountdownMode })
+                    .selectedColor(Theme.COLOR_PRIMARY)
+                    .width(52)
+                    .height(28)
+                    .onChange((isOn: boolean) => {
+                      this.isCountdownMode = isOn
+                    })
+                  Text('倒计时模式')
+                    .fontSize(Theme.FONT_SIZE_MEDIUM)
+                    .fontColor(Theme.COLOR_TEXT_SECONDARY)
+                }
 
                 if (this.isCountdownMode) {
-                  Row({ space: 6 }) {
+                  Row({ space: 8 }) {
                     Button({ type: ButtonType.Circle }) {
-                      Text('-').fontSize(16).fontColor(Theme.COLOR_TEXT_SECONDARY)
+                      Text('-').fontSize(Theme.FONT_SIZE_LARGE).fontColor(Theme.COLOR_TEXT_SECONDARY)
                     }
-                    .width(32)
-                    .height(32)
+                    .width(36)
+                    .height(36)
                     .backgroundColor(Theme.COLOR_BACKGROUND)
                     .onClick(() => {
                       if (this.countdownMinutes > 1) {
                         this.countdownMinutes -= 1
                       }
                     })
+
                     Text(`${this.countdownMinutes}`)
-                      .fontSize(14)
-                      .fontWeight(FontWeight.Medium)
+                      .fontSize(Theme.FONT_SIZE_LARGE)
+                      .fontWeight(FontWeight.Bold)
                       .fontColor(Theme.COLOR_TEXT_PRIMARY)
-                      .width(36)
+                      .width(40)
                       .textAlign(TextAlign.Center)
+
                     Button({ type: ButtonType.Circle }) {
-                      Text('+').fontSize(16).fontColor(Theme.COLOR_TEXT_SECONDARY)
+                      Text('+').fontSize(Theme.FONT_SIZE_LARGE).fontColor(Theme.COLOR_TEXT_SECONDARY)
                     }
-                    .width(32)
-                    .height(32)
+                    .width(36)
+                    .height(36)
                     .backgroundColor(Theme.COLOR_BACKGROUND)
                     .onClick(() => {
                       this.countdownMinutes += 1
                     })
+
                     Text('分钟')
-                      .fontSize(12)
+                      .fontSize(Theme.FONT_SIZE_SMALL)
                       .fontColor(Theme.COLOR_TEXT_TERTIARY)
                   }
                 }
               }
-              .padding({ left: 20, right: 20 })
-              .justifyContent(FlexAlign.Center)
+              .width('100%')
+              .padding({ left: 16, right: 16 })
+              .justifyContent(FlexAlign.SpaceBetween)
 
-              // 启动按钮
+              // 启动按钮 - 更大更醒目
               Button('开始专注')
-                .width('90%')
-                .height(52)
-                .fontSize(16)
-                .fontWeight(FontWeight.Medium)
+                .width('85%')
+                .height(60)
+                .fontSize(Theme.FONT_SIZE_LARGE)
+                .fontWeight(FontWeight.Bold)
                 .fontColor(Color.White)
                 .backgroundColor(Theme.COLOR_PRIMARY)
-                .borderRadius(26)
-                .shadow({ radius: 16, color: '#2563EB30', offsetX: 0, offsetY: 4 })
+                .borderRadius(Theme.BORDER_RADIUS_XLARGE)
+                .shadow(Theme.SHADOW_GLOW)
                 .onClick(() => {
                   this.startSession()
                 })
@@ -796,39 +830,42 @@ struct FocusPage {
             .padding({ left: 16, right: 16 })
           } else if (this.focusState.isBreaking) {
             Button('结束休息')
-              .width('90%')
-              .height(52)
-              .fontSize(16)
-              .fontWeight(FontWeight.Medium)
+              .width('85%')
+              .height(60)
+              .fontSize(Theme.FONT_SIZE_LARGE)
+              .fontWeight(FontWeight.Bold)
               .fontColor(Color.White)
               .backgroundColor(Theme.COLOR_WARNING)
-              .borderRadius(26)
-              .shadow({ radius: 16, color: '#F9731630', offsetX: 0, offsetY: 4 })
+              .borderRadius(Theme.BORDER_RADIUS_XLARGE)
+              .shadow({
+                radius: 20,
+                color: '#F9731640',
+                offsetX: 0,
+                offsetY: 4
+              })
               .onClick(() => {
                 this.onFinishBreak()
               })
           } else {
-            Column({ space: 16 }) {
-              Row({ space: 12 }) {
-                // Rest 按钮
-                if (this.allowRest) {
-                  Button({ type: ButtonType.Circle }) {
-                    Text('☕').fontSize(20)
-                  }
-                  .width(52)
-                  .height(52)
-                  .backgroundColor(Theme.COLOR_BACKGROUND)
-                  .onClick(() => {
-                    void this.onStartBreak(false)
-                  })
-                }
-
-                // Pause 按钮
+            Column({ space: 18 }) {
+              Row({ space: 14 }) {
+                // 休息按钮
                 Button({ type: ButtonType.Circle }) {
-                  Text('⏸️').fontSize(18)
+                  Text('☕').fontSize(24)
                 }
-                .width(52)
-                .height(52)
+                .width(60)
+                .height(60)
+                .backgroundColor(Theme.COLOR_WARNING_BG)
+                .onClick(() => {
+                  this.onStartBreak()
+                })
+
+                // 暂停按钮
+                Button({ type: ButtonType.Circle }) {
+                  Text('⏸').fontSize(24)
+                }
+                .width(60)
+                .height(60)
                 .backgroundColor(Theme.COLOR_BACKGROUND)
                 .onClick(() => {
                   if (this.isRunning()) {
@@ -836,99 +873,119 @@ struct FocusPage {
                   }
                 })
 
-                // Complete 按钮
-                Button('完成')
+                // 完成按钮 - 主要操作
+                Button('完成专注')
                   .layoutWeight(1)
-                  .height(52)
-                  .fontSize(15)
-                  .fontWeight(FontWeight.Medium)
+                  .height(60)
+                  .fontSize(Theme.FONT_SIZE_MEDIUM)
+                  .fontWeight(FontWeight.Bold)
                   .fontColor(Color.White)
                   .backgroundColor(Theme.COLOR_PRIMARY)
-                  .borderRadius(26)
-                  .shadow({ radius: 12, color: '#2563EB30', offsetX: 0, offsetY: 4 })
+                  .borderRadius(Theme.BORDER_RADIUS_XLARGE)
+                  .shadow(Theme.SHADOW_GLOW)
                   .onClick(() => {
                     this.onFinish()
                   })
               }
             }
             .width('100%')
-            .padding({ left: 16, right: 16 })
+            .padding({ left: 20, right: 20 })
           }
 
-          // 统计卡片 - Rest Count 和 Rest Time
-          if (this.allowRest) {
-            Row() {
-              Row({ space: 8 }) {
-                Text('休息次数:')
-                  .fontSize(14)
-                  .fontColor(Theme.COLOR_TEXT_SECONDARY)
-                Text(this.getRestCount().toString())
-                  .fontSize(14)
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor(Theme.COLOR_TEXT_PRIMARY)
-              }
-              .layoutWeight(1)
-              .justifyContent(FlexAlign.Center)
-
-              Divider()
-                .vertical(true)
-                .height(20)
-                .color(Theme.COLOR_BORDER)
-
-              Row({ space: 8 }) {
-                Text('休息时长:')
-                  .fontSize(14)
-                  .fontColor(Theme.COLOR_TEXT_SECONDARY)
-                Text(this.formatTime(this.getTotalRestTime()))
-                  .fontSize(14)
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor(Theme.COLOR_TEXT_PRIMARY)
-              }
-              .layoutWeight(1)
-              .justifyContent(FlexAlign.Center)
+          // 统计卡片
+          Row() {
+            Column({ space: 4 }) {
+              Text('休息次数')
+                .fontSize(Theme.FONT_SIZE_SMALL)
+                .fontColor(Theme.COLOR_TEXT_SECONDARY)
+              Text(this.getRestCount().toString())
+                .fontSize(Theme.FONT_SIZE_TITLE)
+                .fontWeight(FontWeight.Bold)
+                .fontColor(Theme.COLOR_TEXT_PRIMARY)
             }
-            .width('100%')
-            .padding({ left: 16, right: 16, top: 14, bottom: 14 })
-            .margin({ left: 16, right: 16 })
-            .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-            .borderRadius(14)
-            .shadow({ radius: 4, color: '#0000000A', offsetX: 0, offsetY: 2 })
-          }
+            .layoutWeight(1)
+            .justifyContent(FlexAlign.Center)
 
-          // Focus Sessions 卡片
-          Row({ space: 8 }) {
-            Text('专注次数:')
-              .fontSize(14)
-              .fontColor(Theme.COLOR_TEXT_PRIMARY)
-            Text(this.sessionDetails.length.toString())
-              .fontSize(14)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(Theme.COLOR_PRIMARY)
-            Blank()
-            Button('查看详情')
-              .fontSize(13)
-              .height(32)
-              .backgroundColor(Theme.COLOR_PRIMARY_BG)
-              .fontColor(Theme.COLOR_PRIMARY)
-              .borderRadius(16)
+            Column()
+              .width(1)
+              .height(40)
+              .backgroundColor(Theme.COLOR_BORDER)
+
+            Column({ space: 4 }) {
+              Text('休息时长')
+                .fontSize(Theme.FONT_SIZE_SMALL)
+                .fontColor(Theme.COLOR_TEXT_SECONDARY)
+              Text(this.formatTime(this.getTotalRestTime()))
+                .fontSize(Theme.FONT_SIZE_TITLE)
+                .fontWeight(FontWeight.Bold)
+                .fontColor(Theme.COLOR_TEXT_PRIMARY)
+            }
+            .layoutWeight(1)
+            .justifyContent(FlexAlign.Center)
+          }
+          .width('100%')
+          .padding({ left: 20, right: 20, top: 18, bottom: 18 })
+          .margin({ left: 16, right: 16 })
+          .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+          .borderRadius(Theme.BORDER_RADIUS_LARGE)
+          .shadow(Theme.SHADOW_SMALL)
+
+          // 专注记录卡片
+          Row({ space: 10 }) {
+            Column() {
+              Text('📊')
+                .fontSize(24)
+            }
+            .width(48)
+            .height(48)
+            .borderRadius(24)
+            .backgroundColor(Theme.COLOR_PRIMARY_BG)
+            .justifyContent(FlexAlign.Center)
+
+            Column({ space: 2 }) {
+              Text('专注记录')
+                .fontSize(Theme.FONT_SIZE_MEDIUM)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(Theme.COLOR_TEXT_PRIMARY)
+              Text(`共 ${this.sessionDetails.length} 次专注`)
+                .fontSize(Theme.FONT_SIZE_SMALL)
+                .fontColor(Theme.COLOR_TEXT_SECONDARY)
+            }
+            .layoutWeight(1)
+            .alignItems(HorizontalAlign.Start)
+
+            Button('查看')
+              .fontSize(Theme.FONT_SIZE_SMALL)
+              .height(36)
+              .backgroundColor(Theme.COLOR_PRIMARY)
+              .fontColor(Color.White)
+              .borderRadius(Theme.BORDER_RADIUS_FULL)
+              .padding({ left: 18, right: 18 })
               .onClick(() => {
                 this.openSessionDetails()
               })
           }
           .width('100%')
-          .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+          .padding({ left: 18, right: 18, top: 16, bottom: 16 })
           .margin({ left: 16, right: 16 })
           .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-          .borderRadius(14)
-          .shadow({ radius: 4, color: '#0000000A', offsetX: 0, offsetY: 2 })
+          .borderRadius(Theme.BORDER_RADIUS_LARGE)
+          .shadow(Theme.SHADOW_SMALL)
         }
         .layoutWeight(1)
         .backgroundColor(Theme.COLOR_BACKGROUND)
         .width('100%')
-        .padding({ left: 16, right: 16, bottom: 24 })
+        .padding({ left: 0, right: 0, bottom: 28 })
       }
       .width('100%')
       .height('100%')
+
+      // 成功动画
+      SuccessAnimation({
+        visible: $showSuccessAnimation,
+        type: this.successAnimationType,
+        message: this.successMessage
+      })
 
       if (this.showPauseWarning) {
         this.PauseWarningDialog()
@@ -964,33 +1021,41 @@ struct FocusPage {
 
   @Builder
   StartRestDialog() {
-    Column() {
+    Stack() {
       Column()
         .width('100%')
         .height('100%')
-        .backgroundColor('#00000060')
-    }
-    .width('100%')
-    .height('100%')
-    .position({ x: 0, y: 0 })
+        .backgroundColor(Theme.COLOR_OVERLAY)
 
-    Column({ space: 12 }) {
+      Column({ space: Theme.SPACE_MEDIUM }) {
+      // 图标
+      Column() {
+        Text('☕')
+          .fontSize(48)
+      }
+      .width(80)
+      .height(80)
+      .borderRadius(40)
+      .backgroundColor(Theme.COLOR_WARNING_BG)
+      .justifyContent(FlexAlign.Center)
+
       Text('休息时间到了')
-        .fontSize(20)
+        .fontSize(Theme.FONT_SIZE_LARGE)
         .fontWeight(FontWeight.Bold)
-        .fontColor('#111827')
+        .fontColor(Theme.COLOR_TEXT_PRIMARY)
 
-      Text('休息间隔已到，开始休息或跳过。')
-        .fontSize(14)
-        .fontColor('#6B7280')
+      Text('适当休息能让你更加专注高效！')
+        .fontSize(Theme.FONT_SIZE_SMALL)
+        .fontColor(Theme.COLOR_TEXT_SECONDARY)
 
-      Row({ space: 12 }) {
-        Button('跳过休息')
+      Row({ space: 14 }) {
+        Button('跳过')
           .layoutWeight(1)
-          .height(48)
-          .backgroundColor('#F3F4F6')
-          .fontColor('#4B5563')
-          .borderRadius(16)
+          .height(52)
+          .fontSize(Theme.FONT_SIZE_MEDIUM)
+          .backgroundColor(Theme.COLOR_BACKGROUND)
+          .fontColor(Theme.COLOR_TEXT_SECONDARY)
+          .borderRadius(Theme.BORDER_RADIUS_LARGE)
           .onClick(() => {
             this.showStartRestPrompt = false
             this.pendingStartRestPrompt = false
@@ -1000,117 +1065,140 @@ struct FocusPage {
 
         Button('开始休息')
           .layoutWeight(1)
-          .height(48)
-          .backgroundColor('#2F54EB')
+          .height(52)
+          .fontSize(Theme.FONT_SIZE_MEDIUM)
+          .backgroundColor(Theme.COLOR_WARNING)
           .fontColor(Color.White)
-          .borderRadius(16)
+          .borderRadius(Theme.BORDER_RADIUS_LARGE)
           .onClick(async () => {
             this.showStartRestPrompt = false
-            await this.onStartBreak(true)
+            await this.onStartBreak()
           })
       }
+      }
+      .width('85%')
+      .padding(Theme.SPACE_XLARGE)
+      .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+      .borderRadius(Theme.BORDER_RADIUS_XLARGE)
+      .shadow(Theme.SHADOW_LARGE)
+      .position({ x: '7.5%', y: '30%' })
     }
-    .width('85%')
-    .padding(20)
-    .backgroundColor(Color.White)
-    .borderRadius(16)
-    .shadow({ radius: 16, color: '#11182726', offsetX: 0, offsetY: 8 })
-    .position({ x: '7.5%', y: '35%' })
+    .width('100%')
+    .height('100%')
   }
 
   @Builder
   BreakEndDialog() {
-    Column() {
+    Stack() {
       Column()
         .width('100%')
         .height('100%')
-        .backgroundColor('#00000060')
-    }
-    .width('100%')
-    .height('100%')
-    .position({ x: 0, y: 0 })
+        .backgroundColor(Theme.COLOR_OVERLAY)
 
-    Column({ space: 12 }) {
+      Column({ space: Theme.SPACE_MEDIUM }) {
+      Column() {
+        Text('⏰')
+          .fontSize(48)
+      }
+      .width(80)
+      .height(80)
+      .borderRadius(40)
+      .backgroundColor(Theme.COLOR_PRIMARY_BG)
+      .justifyContent(FlexAlign.Center)
+
       Text('休息结束')
-        .fontSize(20)
+        .fontSize(Theme.FONT_SIZE_LARGE)
         .fontWeight(FontWeight.Bold)
-        .fontColor('#111827')
+        .fontColor(Theme.COLOR_TEXT_PRIMARY)
 
-      Text('点击确认继续专注。')
-        .fontSize(14)
-        .fontColor('#6B7280')
+      Text('准备好继续专注了吗？')
+        .fontSize(Theme.FONT_SIZE_SMALL)
+        .fontColor(Theme.COLOR_TEXT_SECONDARY)
 
-      Button('确认')
+      Button('继续专注')
         .width('100%')
-        .height(48)
-        .backgroundColor('#2F54EB')
+        .height(52)
+        .fontSize(Theme.FONT_SIZE_MEDIUM)
+        .backgroundColor(Theme.COLOR_PRIMARY)
         .fontColor(Color.White)
-        .borderRadius(16)
+        .borderRadius(Theme.BORDER_RADIUS_LARGE)
+        .shadow(Theme.SHADOW_GLOW)
         .onClick(async () => {
           await this.onFinishBreak()
         })
+      }
+      .width('85%')
+      .padding(Theme.SPACE_XLARGE)
+      .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+      .borderRadius(Theme.BORDER_RADIUS_XLARGE)
+      .shadow(Theme.SHADOW_LARGE)
+      .position({ x: '7.5%', y: '30%' })
     }
-    .width('85%')
-    .padding(20)
-    .backgroundColor(Color.White)
-    .borderRadius(16)
-    .shadow({ radius: 16, color: '#11182726', offsetX: 0, offsetY: 8 })
-    .position({ x: '7.5%', y: '35%' })
+    .width('100%')
+    .height('100%')
   }
 
   @Builder
   PauseWarningDialog() {
-    Column() {
+    Stack() {
       Column()
         .width('100%')
         .height('100%')
-        .backgroundColor('#00000060')
+        .backgroundColor(Theme.COLOR_OVERLAY)
         .onClick(() => {
           this.showPauseWarning = false
         })
-    }
-    .width('100%')
-    .height('100%')
-    .position({ x: 0, y: 0 })
 
-    Column({ space: 12 }) {
-      Text('暂停任务')
-        .fontSize(20)
+      Column({ space: Theme.SPACE_MEDIUM }) {
+      Column() {
+        Text('⏸')
+          .fontSize(48)
+      }
+      .width(80)
+      .height(80)
+      .borderRadius(40)
+      .backgroundColor(Theme.COLOR_ERROR_BG)
+      .justifyContent(FlexAlign.Center)
+
+      Text('暂停专注')
+        .fontSize(Theme.FONT_SIZE_LARGE)
         .fontWeight(FontWeight.Bold)
-        .fontColor('#111827')
+        .fontColor(Theme.COLOR_TEXT_PRIMARY)
 
-      Text('暂停将结束并保存此次专注。')
-        .fontSize(14)
-        .fontColor('#6B7280')
+      Text('暂停将结束并保存此次专注记录。')
+        .fontSize(Theme.FONT_SIZE_SMALL)
+        .fontColor(Theme.COLOR_TEXT_SECONDARY)
 
-      Row({ space: 8 }) {
+      Row({ space: 10 }) {
         Toggle({ type: ToggleType.Switch, isOn: this.neverShowPauseWarning })
-          .selectedColor('#2F54EB')
+          .selectedColor(Theme.COLOR_PRIMARY)
           .onChange((checked: boolean) => {
             this.neverShowPauseWarning = checked
           })
         Text('不再显示')
-          .fontSize(12)
-          .fontColor('#4B5563')
+          .fontSize(Theme.FONT_SIZE_SMALL)
+          .fontColor(Theme.COLOR_TEXT_TERTIARY)
       }
 
-      Row({ space: 12 }) {
+      Row({ space: 14 }) {
         Button('取消')
           .layoutWeight(1)
-          .height(48)
-          .backgroundColor('#F3F4F6')
-          .fontColor('#4B5563')
-          .borderRadius(16)
+          .height(52)
+          .fontSize(Theme.FONT_SIZE_MEDIUM)
+          .backgroundColor(Theme.COLOR_BACKGROUND)
+          .fontColor(Theme.COLOR_TEXT_SECONDARY)
+          .borderRadius(Theme.BORDER_RADIUS_LARGE)
           .onClick(() => {
             this.showPauseWarning = false
           })
 
-        Button('暂停并保存')
+        Button('暂停')
           .layoutWeight(1)
-          .height(48)
-          .backgroundColor('#EF4444')
+          .height(52)
+          .fontSize(Theme.FONT_SIZE_MEDIUM)
+          .backgroundColor(Theme.COLOR_ERROR)
           .fontColor(Color.White)
-          .borderRadius(16)
+          .borderRadius(Theme.BORDER_RADIUS_LARGE)
           .onClick(async () => {
             this.showPauseWarning = false
             await this.performPause()
@@ -1118,55 +1206,66 @@ struct FocusPage {
       }
     }
     .width('85%')
-    .padding(20)
-    .backgroundColor(Color.White)
-    .borderRadius(16)
-    .shadow({ radius: 16, color: '#11182726', offsetX: 0, offsetY: 8 })
-    .position({ x: '7.5%', y: '35%' })
+    .padding(Theme.SPACE_XLARGE)
+    .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+    .borderRadius(Theme.BORDER_RADIUS_XLARGE)
+    .shadow(Theme.SHADOW_LARGE)
+    .position({ x: '7.5%', y: '28%' })
+    }
+    .width('100%')
+    .height('100%')
   }
 
   @Builder
   LeaveWarningDialog() {
-    Column() {
+    Stack() {
       Column()
         .width('100%')
         .height('100%')
-        .backgroundColor('#00000060')
+        .backgroundColor(Theme.COLOR_OVERLAY)
         .onClick(() => {
           this.showLeaveWarning = false
         })
-    }
-    .width('100%')
-    .height('100%')
-    .position({ x: 0, y: 0 })
 
-    Column({ space: 12 }) {
-      Text('离开任务')
-        .fontSize(20)
+      Column({ space: Theme.SPACE_MEDIUM }) {
+      Column() {
+        Text('🚪')
+          .fontSize(48)
+      }
+      .width(80)
+      .height(80)
+      .borderRadius(40)
+      .backgroundColor(Theme.COLOR_WARNING_BG)
+      .justifyContent(FlexAlign.Center)
+
+      Text('离开专注')
+        .fontSize(Theme.FONT_SIZE_LARGE)
         .fontWeight(FontWeight.Bold)
-        .fontColor('#111827')
+        .fontColor(Theme.COLOR_TEXT_PRIMARY)
 
-      Text('离开将暂停并保存当前专注。')
-        .fontSize(14)
-        .fontColor('#6B7280')
+      Text('离开将暂停并保存当前专注记录。')
+        .fontSize(Theme.FONT_SIZE_SMALL)
+        .fontColor(Theme.COLOR_TEXT_SECONDARY)
 
-      Row({ space: 12 }) {
+      Row({ space: 14 }) {
         Button('取消')
           .layoutWeight(1)
-          .height(48)
-          .backgroundColor('#F3F4F6')
-          .fontColor('#4B5563')
-          .borderRadius(16)
+          .height(52)
+          .fontSize(Theme.FONT_SIZE_MEDIUM)
+          .backgroundColor(Theme.COLOR_BACKGROUND)
+          .fontColor(Theme.COLOR_TEXT_SECONDARY)
+          .borderRadius(Theme.BORDER_RADIUS_LARGE)
           .onClick(() => {
             this.showLeaveWarning = false
           })
 
         Button('离开')
           .layoutWeight(1)
-          .height(48)
-          .backgroundColor('#EF4444')
+          .height(52)
+          .fontSize(Theme.FONT_SIZE_MEDIUM)
+          .backgroundColor(Theme.COLOR_ERROR)
           .fontColor(Color.White)
-          .borderRadius(16)
+          .borderRadius(Theme.BORDER_RADIUS_LARGE)
           .onClick(async () => {
             this.showLeaveWarning = false
             await FocusStore.endSessionByPause()
@@ -1176,177 +1275,227 @@ struct FocusPage {
       }
     }
     .width('85%')
-    .padding(20)
-    .backgroundColor(Color.White)
-    .borderRadius(16)
-    .shadow({ radius: 16, color: '#11182726', offsetX: 0, offsetY: 8 })
-    .position({ x: '7.5%', y: '35%' })
+    .padding(Theme.SPACE_XLARGE)
+    .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+    .borderRadius(Theme.BORDER_RADIUS_XLARGE)
+    .shadow(Theme.SHADOW_LARGE)
+    .position({ x: '7.5%', y: '30%' })
+    }
+    .width('100%')
+    .height('100%')
   }
 
   @Builder
   ActiveTaskDialog() {
-    Column() {
+    Stack() {
       Column()
         .width('100%')
         .height('100%')
-        .backgroundColor('#00000060')
+        .backgroundColor(Theme.COLOR_OVERLAY)
         .onClick(() => {
           this.showActiveTaskWarning = false
         })
+
+      Column({ space: Theme.SPACE_MEDIUM }) {
+      Column() {
+        Text('⚠️')
+          .fontSize(48)
+      }
+      .width(80)
+      .height(80)
+      .borderRadius(40)
+      .backgroundColor(Theme.COLOR_WARNING_BG)
+      .justifyContent(FlexAlign.Center)
+
+      Text('任务进行中')
+        .fontSize(Theme.FONT_SIZE_LARGE)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(Theme.COLOR_TEXT_PRIMARY)
+
+      Text('另一个任务正在进行中。\n请先完成或暂停它再开始新的专注。')
+        .fontSize(Theme.FONT_SIZE_SMALL)
+        .fontColor(Theme.COLOR_TEXT_SECONDARY)
+        .textAlign(TextAlign.Center)
+        .lineHeight(24)
+
+      Button('我知道了')
+        .width('100%')
+        .height(52)
+        .fontSize(Theme.FONT_SIZE_MEDIUM)
+        .backgroundColor(Theme.COLOR_PRIMARY)
+        .fontColor(Color.White)
+        .borderRadius(Theme.BORDER_RADIUS_LARGE)
+        .onClick(() => {
+          this.showActiveTaskWarning = false
+        })
+      }
+      .width('85%')
+      .padding(Theme.SPACE_XLARGE)
+      .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+      .borderRadius(Theme.BORDER_RADIUS_XLARGE)
+      .shadow(Theme.SHADOW_LARGE)
+      .position({ x: '7.5%', y: '30%' })
     }
     .width('100%')
     .height('100%')
-    .position({ x: 0, y: 0 })
-
-    Column({ space: 12 }) {
-      Text('活动任务警告')
-        .fontSize(20)
-        .fontWeight(FontWeight.Bold)
-        .fontColor('#111827')
-
-      Text('另一个任务正在进行中。请先暂停或完成它再开始新的专注。')
-        .fontSize(14)
-        .fontColor('#6B7280')
-
-      Button('确定')
-        .width('100%')
-        .height(48)
-        .backgroundColor('#2F54EB')
-        .fontColor(Color.White)
-        .borderRadius(16)
-        .onClick(() => {
-          this.showActiveTaskWarning = false
-        })
-    }
-    .width('85%')
-    .padding(20)
-    .backgroundColor(Color.White)
-    .borderRadius(16)
-    .shadow({ radius: 16, color: '#11182726', offsetX: 0, offsetY: 8 })
-    .position({ x: '7.5%', y: '35%' })
   }
 
   @Builder
   TaskLoadErrorDialog() {
-    Column() {
+    Stack() {
       Column()
         .width('100%')
         .height('100%')
-        .backgroundColor('#00000060')
+        .backgroundColor(Theme.COLOR_OVERLAY)
         .onClick(() => {
           this.showTaskLoadError = false
         })
-    }
-    .width('100%')
-    .height('100%')
-    .position({ x: 0, y: 0 })
 
-    Column({ space: 12 }) {
-      Text('任务加载错误')
-        .fontSize(20)
+      Column({ space: Theme.SPACE_MEDIUM }) {
+      Column() {
+        Text('❌')
+          .fontSize(48)
+      }
+      .width(80)
+      .height(80)
+      .borderRadius(40)
+      .backgroundColor(Theme.COLOR_ERROR_BG)
+      .justifyContent(FlexAlign.Center)
+
+      Text('加载失败')
+        .fontSize(Theme.FONT_SIZE_LARGE)
         .fontWeight(FontWeight.Bold)
-        .fontColor('#111827')
+        .fontColor(Theme.COLOR_TEXT_PRIMARY)
 
       Text(this.taskLoadErrorMessage)
-        .fontSize(14)
-        .fontColor('#6B7280')
+        .fontSize(Theme.FONT_SIZE_SMALL)
+        .fontColor(Theme.COLOR_TEXT_SECONDARY)
+        .textAlign(TextAlign.Center)
 
-      Button('确定')
+      Button('返回')
         .width('100%')
-        .height(48)
-        .backgroundColor('#2F54EB')
+        .height(52)
+        .fontSize(Theme.FONT_SIZE_MEDIUM)
+        .backgroundColor(Theme.COLOR_PRIMARY)
         .fontColor(Color.White)
-        .borderRadius(16)
+        .borderRadius(Theme.BORDER_RADIUS_LARGE)
         .onClick(() => {
           this.showTaskLoadError = false
           router.back()
         })
+      }
+      .width('85%')
+      .padding(Theme.SPACE_XLARGE)
+      .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+      .borderRadius(Theme.BORDER_RADIUS_XLARGE)
+      .shadow(Theme.SHADOW_LARGE)
+      .position({ x: '7.5%', y: '30%' })
     }
-    .width('85%')
-    .padding(20)
-    .backgroundColor(Color.White)
-    .borderRadius(16)
-    .shadow({ radius: 16, color: '#11182726', offsetX: 0, offsetY: 8 })
-    .position({ x: '7.5%', y: '35%' })
+    .width('100%')
+    .height('100%')
   }
 
   @Builder
   SessionDetailsDialog() {
-    Column() {
+    Stack() {
       Column()
         .width('100%')
         .height('100%')
-        .backgroundColor('#00000060')
+        .backgroundColor(Theme.COLOR_OVERLAY)
         .opacity(this.sessionSheetOpacity)
         .animation({ duration: 220, curve: Curve.EaseInOut })
         .onClick(() => {
           this.closeSessionDetails()
         })
-    }
-    .width('100%')
-    .height('100%')
-    .position({ x: 0, y: 0 })
 
-    Column({ space: 12 }) {
+      Column({ space: Theme.SPACE_MEDIUM }) {
       Row() {
         Text('专注详情')
-          .fontSize(18)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#111827')
+          .fontSize(Theme.FONT_SIZE_LARGE)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(Theme.COLOR_TEXT_PRIMARY)
         Blank()
-        Button('关闭')
-          .fontSize(14)
-          .height(32)
-          .backgroundColor('#F3F4F6')
-          .fontColor('#4B5563')
-          .borderRadius(16)
-          .onClick(() => {
-            this.closeSessionDetails()
-          })
+        Button({ type: ButtonType.Circle }) {
+          Text('✕')
+            .fontSize(Theme.FONT_SIZE_MEDIUM)
+            .fontColor(Theme.COLOR_TEXT_SECONDARY)
+        }
+        .width(40)
+        .height(40)
+        .backgroundColor(Theme.COLOR_BACKGROUND)
+        .onClick(() => {
+          this.closeSessionDetails()
+        })
       }
 
       if (this.sessionDetails.length === 0) {
-        Text('暂无已完成的专注。')
-          .fontSize(13)
-          .fontColor('#6B7280')
+        Column({ space: 12 }) {
+          Text('📭')
+            .fontSize(48)
+          Text('暂无专注记录')
+            .fontSize(Theme.FONT_SIZE_MEDIUM)
+            .fontColor(Theme.COLOR_TEXT_SECONDARY)
+        }
+        .width('100%')
+        .height(200)
+        .justifyContent(FlexAlign.Center)
       } else {
-        List({ space: 8 }) {
+        List({ space: 10 }) {
           ForEach(this.sessionDetails, (item: SessionSummary) => {
             ListItem() {
-              Column({ space: 4 }) {
-                Text(this.formatSessionDate(item.date))
-                  .fontSize(13)
-                  .fontColor('#6B7280')
-                      Row({ space: 12 }) {
-                        Text(`专注: ${item.status === SessionStatus.FINISHED ? this.formatTime(item.focusDuration) : '进行中'}`)
-                          .fontSize(14)
-                          .fontColor('#111827')
-                        Text(`休息: ${item.status === SessionStatus.FINISHED ? this.formatTime(item.restDuration) : '进行中'}`)
-                          .fontSize(14)
-                          .fontColor('#111827')
-                      }
+              Row({ space: 14 }) {
+                Column() {
+                  Text(item.status === SessionStatus.FINISHED ? '✓' : '⏳')
+                    .fontSize(20)
+                    .fontColor(item.status === SessionStatus.FINISHED ? Theme.COLOR_SUCCESS : Theme.COLOR_WARNING)
+                }
+                .width(44)
+                .height(44)
+                .borderRadius(22)
+                .backgroundColor(item.status === SessionStatus.FINISHED ? Theme.COLOR_SUCCESS_BG : Theme.COLOR_WARNING_BG)
+                .justifyContent(FlexAlign.Center)
+
+                Column({ space: 4 }) {
+                  Text(this.formatSessionDate(item.date))
+                    .fontSize(Theme.FONT_SIZE_SMALL)
+                    .fontColor(Theme.COLOR_TEXT_SECONDARY)
+                  Row({ space: 16 }) {
+                    Text(`专注 ${item.status === SessionStatus.FINISHED ? this.formatTime(item.focusDuration) : '进行中'}`)
+                      .fontSize(Theme.FONT_SIZE_MEDIUM)
+                      .fontWeight(FontWeight.Medium)
+                      .fontColor(Theme.COLOR_TEXT_PRIMARY)
+                    Text(`休息 ${item.status === SessionStatus.FINISHED ? this.formatTime(item.restDuration) : '-'}`)
+                      .fontSize(Theme.FONT_SIZE_MEDIUM)
+                      .fontColor(Theme.COLOR_TEXT_TERTIARY)
+                  }
+                }
+                .layoutWeight(1)
+                .alignItems(HorizontalAlign.Start)
               }
               .width('100%')
-              .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-              .backgroundColor(Color.White)
-              .borderRadius(12)
-              .shadow({ radius: 4, color: '#1118270f', offsetX: 0, offsetY: 1 })
+              .padding({ left: 14, right: 14, top: 12, bottom: 12 })
+              .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+              .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
+              .shadow(Theme.SHADOW_SMALL)
             }
           }, (item: SessionSummary) => item.id.toString())
         }
         .width('100%')
-        .height(320)
+        .height(340)
       }
+      }
+      .width('100%')
+      .height('60%')
+      .padding(Theme.SPACE_LARGE)
+      .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+      .borderRadius({ topLeft: Theme.BORDER_RADIUS_XLARGE, topRight: Theme.BORDER_RADIUS_XLARGE })
+      .shadow(Theme.SHADOW_LARGE)
+      .position({ x: 0, y: '40%' })
+      .translate({ x: 0, y: this.sessionSheetOffset })
+      .animation({ duration: 260, curve: Curve.EaseInOut })
     }
     .width('100%')
-    .height('60%')
-    .padding(20)
-    .backgroundColor(Color.White)
-    .borderRadius(16)
-    .shadow({ radius: 16, color: '#11182726', offsetX: 0, offsetY: 8 })
-    .position({ x: 0, y: '40%' })
-    .translate({ x: 0, y: this.sessionSheetOffset })
-    .animation({ duration: 260, curve: Curve.EaseInOut })
+    .height('100%')
   }
 
   private openSessionDetails() {

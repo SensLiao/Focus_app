@@ -1,5 +1,5 @@
 /**
- * 设置页面 - 基于 Figma Design
+ * 设置页面 - 精致现代风格
  */
 import router from '@ohos.router'
 import promptAction from '@ohos.promptAction'
@@ -24,16 +24,17 @@ struct NumberSelector {
   }
 
   build() {
-    Row({ space: Theme.SPACE_TINY }) {
+    Row({ space: 8 }) {
       // 减少按钮
       Button({ type: ButtonType.Circle }) {
         Text('-')
           .fontSize(Theme.FONT_SIZE_LARGE)
+          .fontWeight(FontWeight.Bold)
           .fontColor(this.value <= this.min ? Theme.COLOR_TEXT_TERTIARY : Theme.COLOR_PRIMARY)
       }
-      .width(36)
-      .height(36)
-      .backgroundColor(Theme.COLOR_BACKGROUND)
+      .width(42)
+      .height(42)
+      .backgroundColor(this.value <= this.min ? Theme.COLOR_BACKGROUND : Theme.COLOR_PRIMARY_BG)
       .enabled(this.value > this.min)
       .onClick(() => {
         if (this.value > this.min) {
@@ -42,22 +43,25 @@ struct NumberSelector {
       })
 
       // 数值显示
-      Text(`${this.value}`)
-        .fontSize(Theme.FONT_SIZE_LARGE)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(Theme.COLOR_TEXT_PRIMARY)
-        .width(48)
-        .textAlign(TextAlign.Center)
+      Column() {
+        Text(`${this.value}`)
+          .fontSize(Theme.FONT_SIZE_TITLE)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(Theme.COLOR_PRIMARY)
+      }
+      .width(56)
+      .justifyContent(FlexAlign.Center)
 
       // 增加按钮
       Button({ type: ButtonType.Circle }) {
         Text('+')
           .fontSize(Theme.FONT_SIZE_LARGE)
+          .fontWeight(FontWeight.Bold)
           .fontColor(this.value >= this.max ? Theme.COLOR_TEXT_TERTIARY : Theme.COLOR_PRIMARY)
       }
-      .width(36)
-      .height(36)
-      .backgroundColor(Theme.COLOR_BACKGROUND)
+      .width(42)
+      .height(42)
+      .backgroundColor(this.value >= this.max ? Theme.COLOR_BACKGROUND : Theme.COLOR_PRIMARY_BG)
       .enabled(this.value < this.max)
       .onClick(() => {
         if (this.value < this.max) {
@@ -81,6 +85,8 @@ struct SettingsPage {
   @State initialRestIntervalHours: number = 0
   @State initialRestIntervalMinutes: number = 25
   @State togglesReady: boolean = false
+  @State headerOpacity: number = 0
+  @State contentOpacity: number = 0
 
   async aboutToAppear() {
     // 初始化设置服务并加载设置
@@ -98,42 +104,78 @@ struct SettingsPage {
     this.initialRestIntervalHours = this.restIntervalHours
     this.initialRestIntervalMinutes = this.restIntervalMinutes
     this.togglesReady = true
+
+    // 入场动画
+    setTimeout(() => {
+      this.headerOpacity = 1
+    }, 100)
+    setTimeout(() => {
+      this.contentOpacity = 1
+    }, 200)
   }
 
   build() {
     Column() {
-      // 顶部标题
+      // 顶部标题 - 精致样式
       Row() {
-        Text('设置')
-          .fontSize(24)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(Theme.COLOR_TEXT_PRIMARY)
+        Column({ space: 2 }) {
+          Text('⚙️')
+            .fontSize(28)
+          Text('设置')
+            .fontSize(Theme.FONT_SIZE_LARGE)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(Theme.COLOR_TEXT_PRIMARY)
+        }
+        .alignItems(HorizontalAlign.Start)
       }
       .width('100%')
-      .height(60)
-      .padding({ left: 16, right: 16 })
+      .padding({ left: 20, right: 20, top: 16, bottom: 16 })
       .alignItems(VerticalAlign.Center)
       .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
       .border({
         width: { bottom: 1 },
         color: Theme.COLOR_BORDER
       })
+      .opacity(this.headerOpacity)
+      .animation({
+        duration: Theme.ANIMATION_NORMAL,
+        curve: Curve.EaseOut
+      })
 
       // 可滚动内容
       Scroll() {
-        Column({ space: 16 }) {
+        Column({ space: 20 }) {
           // 卡片1：通知设置
-          Column({ space: 12 }) {
-            Row() {
-              Text('通知')
-                .fontSize(16)
-                .fontWeight(FontWeight.Medium)
+          Column({ space: 16 }) {
+            Row({ space: 8 }) {
+              Text('🔔')
+                .fontSize(Theme.FONT_SIZE_MEDIUM)
+              Text('通知设置')
+                .fontSize(Theme.FONT_SIZE_MEDIUM)
+                .fontWeight(FontWeight.Bold)
                 .fontColor(Theme.COLOR_TEXT_PRIMARY)
-              Blank()
+            }
+            .width('100%')
+
+            Divider().strokeWidth(1).color(Theme.COLOR_DIVIDER)
+
+            Row() {
+              Column({ space: 4 }) {
+                Text('通知提醒')
+                  .fontSize(Theme.FONT_SIZE_MEDIUM)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(Theme.COLOR_TEXT_PRIMARY)
+                Text('在专注结束时发送提醒')
+                  .fontSize(Theme.FONT_SIZE_SMALL)
+                  .fontColor(Theme.COLOR_TEXT_TERTIARY)
+              }
+              .alignItems(HorizontalAlign.Start)
+              .layoutWeight(1)
+              
               Toggle({ type: ToggleType.Switch, isOn: this.notifyOn })
                 .selectedColor(Theme.COLOR_PRIMARY)
-                .width(50)
-                .height(28)
+                .width(52)
+                .height(30)
                 .onChange(async (val: boolean) => {
                   if (!this.togglesReady) {
                     this.notifyOn = val
@@ -167,16 +209,25 @@ struct SettingsPage {
             }
             .width('100%')
 
+            Divider().strokeWidth(1).color(Theme.COLOR_DIVIDER)
+
             Row() {
-              Text('允许休息')
-                .fontSize(16)
-                .fontWeight(FontWeight.Medium)
-                .fontColor(Theme.COLOR_TEXT_PRIMARY)
-              Blank()
+              Column({ space: 4 }) {
+                Text('允许休息')
+                  .fontSize(Theme.FONT_SIZE_MEDIUM)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(Theme.COLOR_TEXT_PRIMARY)
+                Text('在专注过程中安排休息时间')
+                  .fontSize(Theme.FONT_SIZE_SMALL)
+                  .fontColor(Theme.COLOR_TEXT_TERTIARY)
+              }
+              .alignItems(HorizontalAlign.Start)
+              .layoutWeight(1)
+              
               Toggle({ type: ToggleType.Switch, isOn: this.allowRest })
                 .selectedColor(Theme.COLOR_PRIMARY)
-                .width(50)
-                .height(28)
+                .width(52)
+                .height(30)
                 .onChange(async (val: boolean) => {
                   if (!this.togglesReady) {
                     this.allowRest = val
@@ -210,32 +261,39 @@ struct SettingsPage {
             .width('100%')
           }
           .width('100%')
-          .padding(20)
+          .padding(22)
           .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-          .borderRadius(16)
-          .shadow({
-            radius: 4,
-            color: '#0000000A',
-            offsetX: 0,
-            offsetY: 2
-          })
+          .borderRadius(Theme.BORDER_RADIUS_LARGE)
+          .shadow(Theme.SHADOW_MEDIUM)
 
           // 卡片2：专注设置
-          Column({ space: 16 }) {
-            Text('专注设置')
-              .fontSize(15)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(Theme.COLOR_TEXT_PRIMARY)
-              .width('100%')
+          Column({ space: 18 }) {
+            Row({ space: 8 }) {
+              Text('🎯')
+                .fontSize(Theme.FONT_SIZE_MEDIUM)
+              Text('专注设置')
+                .fontSize(Theme.FONT_SIZE_MEDIUM)
+                .fontWeight(FontWeight.Bold)
+                .fontColor(Theme.COLOR_TEXT_PRIMARY)
+            }
+            .width('100%')
 
             Divider().strokeWidth(1).color(Theme.COLOR_DIVIDER)
 
             // 默认专注时长
             Row() {
-              Text('默认专注时长')
-                .fontSize(15)
-                .fontColor(Theme.COLOR_TEXT_PRIMARY)
-                .layoutWeight(1)
+              Column({ space: 4 }) {
+                Text('默认专注时长')
+                  .fontSize(Theme.FONT_SIZE_MEDIUM)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(Theme.COLOR_TEXT_PRIMARY)
+                Text('分钟')
+                  .fontSize(Theme.FONT_SIZE_SMALL)
+                  .fontColor(Theme.COLOR_TEXT_TERTIARY)
+              }
+              .alignItems(HorizontalAlign.Start)
+              .layoutWeight(1)
+              
               NumberSelector({
                 value: this.$focusDuration,
                 min: 5,
@@ -253,10 +311,18 @@ struct SettingsPage {
 
             // 默认休息时长
             Row() {
-              Text('默认休息时长')
-                .fontSize(15)
-                .fontColor(Theme.COLOR_TEXT_PRIMARY)
-                .layoutWeight(1)
+              Column({ space: 4 }) {
+                Text('默认休息时长')
+                  .fontSize(Theme.FONT_SIZE_MEDIUM)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(Theme.COLOR_TEXT_PRIMARY)
+                Text('分钟')
+                  .fontSize(Theme.FONT_SIZE_SMALL)
+                  .fontColor(Theme.COLOR_TEXT_TERTIARY)
+              }
+              .alignItems(HorizontalAlign.Start)
+              .layoutWeight(1)
+              
               NumberSelector({
                 value: this.$restMinutes,
                 min: 1,
@@ -270,120 +336,147 @@ struct SettingsPage {
             Divider().strokeWidth(1).color(Theme.COLOR_DIVIDER)
 
             // 休息提醒间隔
-            Column({ space: 8 }) {
-              Text('休息提醒间隔')
-                .fontSize(15)
-                .fontColor(Theme.COLOR_TEXT_PRIMARY)
-                .width('100%')
+            Column({ space: 12 }) {
+              Column({ space: 4 }) {
+                Text('休息提醒间隔')
+                  .fontSize(Theme.FONT_SIZE_MEDIUM)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(Theme.COLOR_TEXT_PRIMARY)
+                Text('每隔此时间提醒你休息一下')
+                  .fontSize(Theme.FONT_SIZE_SMALL)
+                  .fontColor(Theme.COLOR_TEXT_TERTIARY)
+              }
+              .alignItems(HorizontalAlign.Start)
+              .width('100%')
 
-              Text('每隔此时间提醒你休息一下')
-                .fontSize(13)
-                .fontColor(Theme.COLOR_TEXT_TERTIARY)
-                .width('100%')
-
-              Row({ space: 12 }) {
+              Row({ space: 16 }) {
                 // 小时选择
-                NumberSelector({
-                  value: this.$restIntervalHours,
-                  min: 0,
-                  max: 4,
-                  step: 1,
-                  unit: 'h',
-                })
+                Row({ space: 6 }) {
+                  NumberSelector({
+                    value: this.$restIntervalHours,
+                    min: 0,
+                    max: 4,
+                    step: 1,
+                    unit: 'h',
+                  })
+                  Text('时')
+                    .fontSize(Theme.FONT_SIZE_SMALL)
+                    .fontColor(Theme.COLOR_TEXT_SECONDARY)
+                }
 
                 Text(':')
-                  .fontSize(20)
-                  .fontColor(Theme.COLOR_TEXT_SECONDARY)
+                  .fontSize(Theme.FONT_SIZE_LARGE)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor(Theme.COLOR_TEXT_TERTIARY)
+                  
                 // 分钟选择
-                NumberSelector({
-                  value: this.$restIntervalMinutes,
-                  min: 0,
-                  max: 55,
-                  step: 5,
-                  unit: 'min',
-                })
+                Row({ space: 6 }) {
+                  NumberSelector({
+                    value: this.$restIntervalMinutes,
+                    min: 0,
+                    max: 55,
+                    step: 5,
+                    unit: 'min',
+                  })
+                  Text('分')
+                    .fontSize(Theme.FONT_SIZE_SMALL)
+                    .fontColor(Theme.COLOR_TEXT_SECONDARY)
+                }
               }
               .width('100%')
-              .justifyContent(FlexAlign.Start)
+              .justifyContent(FlexAlign.Center)
 
               if (this.hasRestSettingsChanges()) {
-                Row() {
-                  Blank()
-                  Button('保存更改')
-                    .fontSize(14)
-                    .height(36)
-                    .fontColor(Color.White)
-                    .backgroundColor(Theme.COLOR_PRIMARY)
-                    .borderRadius(18)
-                    .onClick(async () => {
-                      await this.saveRestSettings()
-                    })
-                }
-                .width('100%')
-                .margin({ top: 8 })
+                Button('保存更改')
+                  .width('100%')
+                  .fontSize(Theme.FONT_SIZE_MEDIUM)
+                  .height(48)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor(Color.White)
+                  .backgroundColor(Theme.COLOR_PRIMARY)
+                  .borderRadius(Theme.BORDER_RADIUS_LARGE)
+                  .shadow(Theme.SHADOW_GLOW)
+                  .margin({ top: 8 })
+                  .onClick(async () => {
+                    await this.saveRestSettings()
+                  })
               }
             }
           }
           .width('100%')
-          .padding(20)
+          .padding(22)
           .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-          .borderRadius(16)
-          .shadow({
-            radius: 4,
-            color: '#0000000A',
-            offsetX: 0,
-            offsetY: 2
-          })
+          .borderRadius(Theme.BORDER_RADIUS_LARGE)
+          .shadow(Theme.SHADOW_MEDIUM)
 
           // 卡片3：关于
-          Column({ space: 12 }) {
-            Text('关于')
-              .fontSize(15)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(Theme.COLOR_TEXT_PRIMARY)
-              .width('100%')
-
-            Divider().strokeWidth(1).color(Theme.COLOR_DIVIDER)
-
-            Row() {
-              Text('版本')
-                .fontSize(15)
+          Column({ space: 16 }) {
+            Row({ space: 8 }) {
+              Text('ℹ️')
+                .fontSize(Theme.FONT_SIZE_MEDIUM)
+              Text('关于')
+                .fontSize(Theme.FONT_SIZE_MEDIUM)
+                .fontWeight(FontWeight.Bold)
                 .fontColor(Theme.COLOR_TEXT_PRIMARY)
-              Blank()
-              Text('1.0.0')
-                .fontSize(15)
-                .fontColor(Theme.COLOR_TEXT_SECONDARY)
             }
             .width('100%')
 
             Divider().strokeWidth(1).color(Theme.COLOR_DIVIDER)
 
             Row() {
-              Text('使用指南')
-                .fontSize(15)
-                .fontColor(Theme.COLOR_PRIMARY)
+              Column({ space: 4 }) {
+                Text('版本号')
+                  .fontSize(Theme.FONT_SIZE_MEDIUM)
+                  .fontColor(Theme.COLOR_TEXT_PRIMARY)
+              }
+              .alignItems(HorizontalAlign.Start)
+              
               Blank()
-              Text('→')
-                .fontSize(16)
+              
+              Text('1.0.0')
+                .fontSize(Theme.FONT_SIZE_MEDIUM)
+                .fontWeight(FontWeight.Bold)
+                .fontColor(Theme.COLOR_PRIMARY)
+                .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+                .backgroundColor(Theme.COLOR_PRIMARY_BG)
+                .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
+            }
+            .width('100%')
+
+            Divider().strokeWidth(1).color(Theme.COLOR_DIVIDER)
+
+            Row() {
+              Row({ space: 8 }) {
+                Text('📖')
+                  .fontSize(Theme.FONT_SIZE_MEDIUM)
+                Text('使用指南')
+                  .fontSize(Theme.FONT_SIZE_MEDIUM)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(Theme.COLOR_PRIMARY)
+              }
+              Blank()
+              Text('›')
+                .fontSize(Theme.FONT_SIZE_TITLE)
                 .fontColor(Theme.COLOR_TEXT_TERTIARY)
             }
             .width('100%')
+            .padding({ top: 4, bottom: 4 })
             .onClick(() => {
               router.pushUrl({ url: 'pages/GuidePage' })
             })
           }
           .width('100%')
-          .padding(20)
+          .padding(22)
           .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-          .borderRadius(16)
-          .shadow({
-            radius: 4,
-            color: '#0000000A',
-            offsetX: 0,
-            offsetY: 2
-          })
+          .borderRadius(Theme.BORDER_RADIUS_LARGE)
+          .shadow(Theme.SHADOW_MEDIUM)
         }
-        .padding({ left: 16, right: 16, top: 16, bottom: 80 })
+        .padding({ left: 20, right: 20, top: 20, bottom: 100 })
+        .opacity(this.contentOpacity)
+        .animation({
+          duration: Theme.ANIMATION_NORMAL,
+          curve: Curve.EaseOut
+        })
       }
       .layoutWeight(1)
 
@@ -409,6 +502,6 @@ struct SettingsPage {
     this.initialRestMinutes = this.restMinutes
     this.initialRestIntervalHours = this.restIntervalHours
     this.initialRestIntervalMinutes = this.restIntervalMinutes
-    promptAction.showToast({ message: 'Settings saved' })
+    promptAction.showToast({ message: '设置已保存' })
   }
 }
