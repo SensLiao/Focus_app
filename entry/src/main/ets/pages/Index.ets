@@ -31,6 +31,9 @@ struct Index {
   // 动画相关状态
   @State headerOpacity: number = 0
   @State listItemsLoaded: boolean = false
+  // 滑动手势相关
+  @State panOffsetX: number = 0
+  private readonly swipeThreshold: number = 80
 
   async aboutToAppear() {
     TaskStore.init(getContext(this))
@@ -75,6 +78,22 @@ struct Index {
     }
   }
 
+  private handleSwipeGesture(offsetX: number, velocity: number) {
+    const absOffset = Math.abs(offsetX)
+    const absVelocity = Math.abs(velocity)
+    
+    // 快速滑动或滑动距离足够
+    if (absVelocity > 500 || absOffset > this.swipeThreshold) {
+      if (offsetX > 0) {
+        // 向右滑动 - 切换到历史页面
+        router.replaceUrl({ url: 'pages/HistoryPage' })
+      } else if (offsetX < 0) {
+        // 向左滑动 - 切换到设置页面
+        router.replaceUrl({ url: 'pages/SettingsPage' })
+      }
+    }
+  }
+
   build() {
     Stack({ alignContent: Alignment.BottomEnd }) {
       Column() {
@@ -94,7 +113,7 @@ struct Index {
 
             Blank()
 
-            // 任务数量徽章
+            // 任务数量徽章 - 红色圆点提示（类似微信）
             if (this.taskState.tasks.length > 0) {
               Column() {
                 Text(`${this.taskState.tasks.length}`)
@@ -102,12 +121,12 @@ struct Index {
                   .fontWeight(FontWeight.Bold)
                   .fontColor(Color.White)
               }
-              .width(36)
+              .width(this.taskState.tasks.length > 9 ? 44 : 36)
               .height(36)
               .borderRadius(18)
-              .backgroundColor(Theme.COLOR_PRIMARY)
+              .backgroundColor('#FF3B30')
               .justifyContent(FlexAlign.Center)
-              .shadow(Theme.SHADOW_GLOW)
+              .padding({ left: 4, right: 4 })
             }
           }
           .width('100%')
@@ -130,7 +149,7 @@ struct Index {
             LoadingProgress()
               .width(48)
               .height(48)
-              .color(Theme.COLOR_PRIMARY)
+              .color(Theme.COLOR_TEXT_PRIMARY)
             Text('加载中...')
               .fontSize(Theme.FONT_SIZE_MEDIUM)
               .fontColor(Theme.COLOR_TEXT_SECONDARY)
@@ -149,7 +168,7 @@ struct Index {
             .width(140)
             .height(140)
             .borderRadius(70)
-            .backgroundColor(Theme.COLOR_PRIMARY_BG)
+            .backgroundColor(Theme.COLOR_DIVIDER)
             .justifyContent(FlexAlign.Center)
 
             Text('暂无任务')
@@ -189,7 +208,7 @@ struct Index {
                     .width(3)
                     .height('30%')
                     .borderRadius(2)
-                    .backgroundColor(this.isActiveTask(task) ? Theme.COLOR_SUCCESS : Theme.COLOR_PRIMARY_LIGHT)
+                    .backgroundColor(this.isActiveTask(task) ? Theme.COLOR_TEXT_PRIMARY : Theme.COLOR_BORDER)
 
                   Column({ space: 4 }) {
                     Row({ space: 8 }) {
@@ -207,13 +226,13 @@ struct Index {
                           Circle()
                             .width(8)
                             .height(8)
-                            .fill(this.isRestingTask(task) ? Theme.COLOR_WARNING : Theme.COLOR_SUCCESS)
+                            .fill(Theme.COLOR_TEXT_TERTIARY)
                           Text(this.isRestingTask(task) ? '休息中' : '进行中')
                             .fontSize(Theme.FONT_SIZE_TINY)
-                            .fontColor(this.isRestingTask(task) ? Theme.COLOR_WARNING : Theme.COLOR_SUCCESS)
+                            .fontColor(Theme.COLOR_TEXT_SECONDARY)
                         }
                         .padding({ left: 10, right: 10, top: 4, bottom: 4 })
-                        .backgroundColor(this.isRestingTask(task) ? Theme.COLOR_WARNING_BG : Theme.COLOR_SUCCESS_BG)
+                        .backgroundColor(Theme.COLOR_DIVIDER)
                         .borderRadius(Theme.BORDER_RADIUS_FULL)
                       }
                     }
@@ -240,22 +259,26 @@ struct Index {
                   if (this.isEditMode) {
                     Row({ space: 10 }) {
                       Button({ type: ButtonType.Normal }) {
-                        Text('✏️').fontSize(20)
+                        Image($r('app.media.sub_task_change'))
+                          .width(24)
+                          .height(24)
                       }
                       .width(44)
                       .height(44)
-                      .backgroundColor(Theme.COLOR_PRIMARY_BG)
+                      .backgroundColor(Theme.COLOR_DIVIDER)
                       .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
                       .onClick(() => {
                         this.goToTaskForm(task)
                       })
 
                       Button({ type: ButtonType.Normal }) {
-                        Text('🗑️').fontSize(20)
+                        Image($r('app.media.delete_icon'))
+                          .width(24)
+                          .height(24)
                       }
                       .width(44)
                       .height(44)
-                      .backgroundColor(Theme.COLOR_ERROR_BG)
+                      .backgroundColor(Theme.COLOR_DIVIDER)
                       .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
                       .onClick(() => {
                         this.deleteTarget = task
@@ -263,17 +286,17 @@ struct Index {
                       })
                     }
                   } else {
-                    // 播放按钮 - 更大更醒目
+                    // 播放按钮 - 使用图片资源
                     Button({ type: ButtonType.Circle }) {
-                      Text(this.isRestingTask(task) ? '☕' : '▶')
-                        .fontSize(22)
-                        .fontColor(Color.White)
+                      Image($r('app.media.start_button'))
+                        .width(24)
+                        .height(24)
                     }
                     .width(44)
                     .height(44)
-                    .backgroundColor(this.isRestingTask(task) ? Theme.COLOR_WARNING :
-                      (this.isActiveTask(task) ? Theme.COLOR_SUCCESS : Theme.COLOR_PRIMARY))
-                    .shadow(this.isActiveTask(task) ? Theme.SHADOW_GLOW : Theme.SHADOW_MEDIUM)
+                    .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+                    .border({ width: 1, color: Theme.COLOR_BORDER })
+                    .shadow(Theme.SHADOW_SMALL)
                     .onClick(() => {
                       if (this.isActiveTask(task)) {
                         this.resumeActiveTask(task)
@@ -309,17 +332,24 @@ struct Index {
       .height('100%')
       .backgroundColor(Theme.COLOR_BACKGROUND)
 
-      // 浮动按钮组
-      Column({ space: 14 }) {
+      // 右下角按钮组
+      Column({ space: 12 }) {
         // 编辑模式按钮
         Button({ type: ButtonType.Circle }) {
-          Text(this.isEditMode ? '✕' : '✏️')
-            .fontSize(this.isEditMode ? 26 : 24)
-            .fontColor(Color.White)
+          if (this.isEditMode) {
+            Text('✕')
+              .fontSize(26)
+              .fontColor(Theme.COLOR_TEXT_PRIMARY)
+          } else {
+            Image($r('app.media.editor_task'))
+              .width(28)
+              .height(28)
+          }
         }
         .width(56)
         .height(56)
-        .backgroundColor(this.isEditMode ? Theme.COLOR_WARNING : '#6B7280')
+        .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+        .border({ width: 1, color: Theme.COLOR_BORDER })
         .shadow(Theme.SHADOW_MEDIUM)
         .onClick(() => {
           this.isEditMode = !this.isEditMode
@@ -330,17 +360,19 @@ struct Index {
           Text('+')
             .fontSize(36)
             .fontWeight(FontWeight.Normal)
-            .fontColor(Color.White)
+            .fontColor(Theme.COLOR_TEXT_PRIMARY)
         }
         .width(64)
         .height(64)
-        .backgroundColor(Theme.COLOR_PRIMARY)
-        .shadow(Theme.SHADOW_GLOW)
+        .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+        .border({ width: 1, color: Theme.COLOR_BORDER })
+        .shadow(Theme.SHADOW_MEDIUM)
         .onClick(() => {
           this.goToTaskForm()
         })
       }
       .margin({ right: 20, bottom: 100 })
+
       if (this.showRecoverDialog) {
         this.RecoverDialog()
       }
@@ -351,6 +383,16 @@ struct Index {
     }
     .width('100%')
     .height('100%')
+    .gesture(
+      PanGesture({ direction: PanDirection.Horizontal })
+        .onActionUpdate((event: GestureEvent) => {
+          this.panOffsetX = event.offsetX
+        })
+        .onActionEnd((event: GestureEvent) => {
+          this.handleSwipeGesture(event.offsetX, event.velocityX)
+          this.panOffsetX = 0
+        })
+    )
   }
 
   private getGreeting(): string {
@@ -380,7 +422,7 @@ struct Index {
         .width(80)
         .height(80)
         .borderRadius(40)
-        .backgroundColor(Theme.COLOR_PRIMARY_BG)
+        .backgroundColor(Theme.COLOR_DIVIDER)
         .justifyContent(FlexAlign.Center)
         Text('发现未完成的专注')
           .fontSize(Theme.FONT_SIZE_LARGE)
@@ -424,10 +466,10 @@ struct Index {
             .fontSize(Theme.FONT_SIZE_MEDIUM)
             .height(52)
             .layoutWeight(1)
-            .backgroundColor(Theme.COLOR_PRIMARY)
-            .fontColor(Color.White)
+            .backgroundColor(Theme.COLOR_TEXT_PRIMARY)
+            .fontColor(Theme.COLOR_TEXT_ON_PRIMARY)
             .borderRadius(Theme.BORDER_RADIUS_LARGE)
-            .shadow(Theme.SHADOW_GLOW)
+            .shadow(Theme.SHADOW_MEDIUM)
             .onClick(async () => {
               this.showRecoverDialog = false
               const session = this.recoveredSession
@@ -468,7 +510,7 @@ struct Index {
         .width(80)
         .height(80)
         .borderRadius(40)
-        .backgroundColor(Theme.COLOR_PRIMARY_BG)
+        .backgroundColor(Theme.COLOR_DIVIDER)
         .justifyContent(FlexAlign.Center)
 
         Text('开启通知')
@@ -500,10 +542,10 @@ struct Index {
             .fontSize(Theme.FONT_SIZE_MEDIUM)
             .height(52)
             .layoutWeight(1)
-            .backgroundColor(Theme.COLOR_PRIMARY)
-            .fontColor(Color.White)
+            .backgroundColor(Theme.COLOR_TEXT_PRIMARY)
+            .fontColor(Theme.COLOR_TEXT_ON_PRIMARY)
             .borderRadius(Theme.BORDER_RADIUS_LARGE)
-            .shadow(Theme.SHADOW_GLOW)
+            .shadow(Theme.SHADOW_MEDIUM)
             .onClick(async () => {
               const context = getContext(this) as common.UIAbilityContext
               await NotificationService.requestEnable(context)
@@ -614,7 +656,7 @@ struct Index {
       },
       secondaryButton: {
         value: 'Delete',
-        fontColor: Theme.COLOR_ERROR,
+        fontColor: Theme.COLOR_TEXT_PRIMARY,
         action: async () => {
           await this.deleteTask(target)
           this.deleteTarget = null
