@@ -40,14 +40,15 @@ export struct TaskItem {
           if (this.task.totalFocusTime > 0) {
             Text(this.formatDuration(this.task.totalFocusTime))
               .fontSize(Theme.FONT_SIZE_TINY)
-              .fontColor(Theme.COLOR_PRIMARY)
+              .fontColor(Theme.COLOR_TEXT_PRIMARY)
               .padding({
                 left: Theme.SPACE_SMALL,
                 right: Theme.SPACE_SMALL,
                 top: Theme.SPACE_TINY,
                 bottom: Theme.SPACE_TINY
               })
-              .backgroundColor('#EFF6FF')
+              .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+              .border({ width: 1, color: Theme.COLOR_BORDER })
               .borderRadius(Theme.BORDER_RADIUS_SMALL)
           }
 
@@ -61,7 +62,8 @@ export struct TaskItem {
                 top: Theme.SPACE_TINY,
                 bottom: Theme.SPACE_TINY
               })
-              .backgroundColor('#F5F5F5')
+              .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+              .border({ width: 1, color: Theme.COLOR_BORDER })
               .borderRadius(Theme.BORDER_RADIUS_SMALL)
           }
         }
@@ -77,14 +79,10 @@ export struct TaskItem {
         }
         .width(50)
         .height(50)
-        .backgroundColor(this.isResting ? '#B37FEB' : '#52C41A')
+        .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+        .border({ width: 1, color: Theme.COLOR_BORDER })
         .borderRadius(25)
-        .shadow({
-          radius: 12,
-          color: this.isResting ? '#B37FEB33' : '#52C41A33',
-          offsetX: 0,
-          offsetY: 4
-        })
+        .shadow(Theme.SHADOW_SMALL)
         .onClick(() => {
           if (this.onResume) {
             this.onResume(this.task)
@@ -100,8 +98,10 @@ export struct TaskItem {
         Button('Start')
           .fontSize(Theme.FONT_SIZE_SMALL)
           .height(40)
+          .fontColor(Theme.COLOR_TEXT_PRIMARY)
           .padding({ left: Theme.SPACE_LARGE, right: Theme.SPACE_LARGE })
-          .backgroundColor(Theme.COLOR_PRIMARY)
+          .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+          .border({ width: 1, color: Theme.COLOR_BORDER })
           .borderRadius(Theme.BORDER_RADIUS_LARGE)
           .fontWeight(FontWeight.Medium)
           .shadow({
@@ -142,7 +142,7 @@ export struct TaskItem {
             },
             secondaryButton: {
               value: 'Delete',
-              fontColor: Theme.COLOR_ERROR,
+              fontColor: Theme.COLOR_TEXT_PRIMARY,
               action: () => {
                 if (this.onDelete) {
                   this.onDelete(this.task)

@@ -34,7 +34,7 @@ export struct FocusTimer {
       // 计时器显示
       Text(this.isCountdown ? this.formatTime(this.remainingMs) : this.formatTime(this.elapsedMs))
         .fontSize(72)
-        .fontColor(this.isCountdown && this.remainingMs < 60000 ? Theme.COLOR_ERROR : Theme.COLOR_PRIMARY)
+        .fontColor(Theme.COLOR_TEXT_PRIMARY)
         .fontWeight(FontWeight.Bold)
         .margin({ top: Theme.SPACE_LARGE })
         .fontFamily('monospace')
@@ -54,7 +54,9 @@ export struct FocusTimer {
             .fontSize(Theme.FONT_SIZE_MEDIUM)
             .height(48)
             .layoutWeight(1)
-            .backgroundColor(Theme.COLOR_PRIMARY)
+            .fontColor(Theme.COLOR_TEXT_PRIMARY)
+            .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+            .border({ width: 1, color: Theme.COLOR_BORDER })
             .borderRadius(Theme.BORDER_RADIUS_LARGE)
             .fontWeight(FontWeight.Medium)
             .shadow({
@@ -73,7 +75,9 @@ export struct FocusTimer {
             .fontSize(Theme.FONT_SIZE_MEDIUM)
             .height(48)
             .layoutWeight(1)
-            .backgroundColor(Theme.COLOR_ERROR)
+            .fontColor(Theme.COLOR_TEXT_PRIMARY)
+            .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+            .border({ width: 1, color: Theme.COLOR_BORDER })
             .borderRadius(Theme.BORDER_RADIUS_LARGE)
             .fontWeight(FontWeight.Medium)
             .shadow({

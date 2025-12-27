@@ -197,7 +197,7 @@ export struct SuccessAnimation {
               .width(140)
               .height(140)
               .fill(Color.Transparent)
-              .stroke(this.type === 'complete' ? Theme.COLOR_SUCCESS : Theme.COLOR_PRIMARY)
+              .stroke(Theme.COLOR_TEXT_PRIMARY)
               .strokeWidth(3)
               .scale({ x: this.ringScale, y: this.ringScale })
               .opacity(this.ringOpacity)
@@ -211,7 +211,7 @@ export struct SuccessAnimation {
               .width(140)
               .height(140)
               .fill(Color.Transparent)
-              .stroke(this.type === 'complete' ? Theme.COLOR_SUCCESS_LIGHT : Theme.COLOR_PRIMARY_LIGHT)
+              .stroke(Theme.COLOR_TEXT_SECONDARY)
               .strokeWidth(2)
               .scale({ x: this.secondRingScale, y: this.secondRingScale })
               .opacity(this.secondRingOpacity)
@@ -224,13 +224,13 @@ export struct SuccessAnimation {
             Circle()
               .width(120)
               .height(120)
-              .fill(this.type === 'complete' ? Theme.COLOR_SUCCESS_BG : Theme.COLOR_PRIMARY_BG)
+              .fill(Theme.COLOR_CARD_BACKGROUND)
 
             // 图标
             Text(this.type === 'complete' ? '🎉' : '✓')
               .fontSize(this.type === 'complete' ? 56 : 48)
               .fontWeight(FontWeight.Bold)
-              .fontColor(this.type === 'complete' ? Theme.COLOR_SUCCESS : Theme.COLOR_PRIMARY)
+              .fontColor(Theme.COLOR_TEXT_PRIMARY)
               .scale({ x: this.iconScale, y: this.iconScale })
               .animation({
                 duration: 200,

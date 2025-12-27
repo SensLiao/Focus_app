@@ -49,10 +49,15 @@ struct GuidePage {
             .fontColor(Theme.COLOR_TEXT_PRIMARY)
             .layoutWeight(1)
 
-          Text('📖')
-            .fontSize(28)
+          Stack({ alignContent: Alignment.Center }) {
+            Text('📖')
+              .fontSize(Theme.FONT_SIZE_LARGE)
+          }
+          .width(44)
+          .height(44)
         }
         .width('100%')
+        .alignItems(VerticalAlign.Center)
         .padding({ left: 16, right: 20, top: 12, bottom: 12 })
         .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
         .border({
@@ -92,12 +97,13 @@ struct GuidePage {
                   Text('1')
                     .fontSize(Theme.FONT_SIZE_LARGE)
                     .fontWeight(FontWeight.Bold)
-                    .fontColor(Color.White)
+                    .fontColor(Theme.COLOR_TEXT_PRIMARY)
                 }
                 .width(36)
                 .height(36)
                 .borderRadius(18)
-                .backgroundColor(Theme.COLOR_PRIMARY)
+                .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+                .border({ width: 1, color: Theme.COLOR_BORDER })
                 .justifyContent(FlexAlign.Center)
 
                 Text('开启系统专注模式')
@@ -142,8 +148,9 @@ struct GuidePage {
                 .height(52)
                 .fontSize(Theme.FONT_SIZE_MEDIUM)
                 .fontWeight(FontWeight.Bold)
-                .fontColor(Color.White)
-                .backgroundColor(Theme.COLOR_PRIMARY)
+                .fontColor(Theme.COLOR_TEXT_PRIMARY)
+                .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+                .border({ width: 1, color: Theme.COLOR_BORDER })
                 .borderRadius(Theme.BORDER_RADIUS_LARGE)
                 .shadow(Theme.SHADOW_GLOW)
                 .margin({ top: 4 })
@@ -164,12 +171,13 @@ struct GuidePage {
                   Text('2')
                     .fontSize(Theme.FONT_SIZE_LARGE)
                     .fontWeight(FontWeight.Bold)
-                    .fontColor(Color.White)
+                    .fontColor(Theme.COLOR_TEXT_PRIMARY)
                 }
                 .width(36)
                 .height(36)
                 .borderRadius(18)
-                .backgroundColor(Theme.COLOR_SUCCESS)
+                .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+                .border({ width: 1, color: Theme.COLOR_BORDER })
                 .justifyContent(FlexAlign.Center)
 
                 Text('本应用的专注机制')
@@ -229,12 +237,13 @@ struct GuidePage {
                   Text('3')
                     .fontSize(Theme.FONT_SIZE_LARGE)
                     .fontWeight(FontWeight.Bold)
-                    .fontColor(Color.White)
+                    .fontColor(Theme.COLOR_TEXT_PRIMARY)
                 }
                 .width(36)
                 .height(36)
                 .borderRadius(18)
-                .backgroundColor('#F59E0B')
+                .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+                .border({ width: 1, color: Theme.COLOR_BORDER })
                 .justifyContent(FlexAlign.Center)
 
                 Text('使用建议')
@@ -388,8 +397,9 @@ struct GuidePage {
           .height(52)
           .fontSize(Theme.FONT_SIZE_MEDIUM)
           .fontWeight(FontWeight.Bold)
-          .backgroundColor(Theme.COLOR_PRIMARY)
-          .fontColor(Color.White)
+          .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+          .fontColor(Theme.COLOR_TEXT_PRIMARY)
+          .border({ width: 1, color: Theme.COLOR_BORDER })
           .borderRadius(Theme.BORDER_RADIUS_LARGE)
           .shadow(Theme.SHADOW_GLOW)
           .onClick(() => {

@@ -2,6 +2,7 @@
  * History page - completed sessions with stats filter.
  */
 
+import router from '@ohos.router'
 import { TaskRepo } from '../data/TaskRepo'
 import { SessionRepo } from '../data/SessionRepo'
 import { SegmentRepo } from '../data/SegmentRepo'
@@ -77,6 +78,9 @@ struct HistoryPage {
   private readonly chartBarWidth: number = 8
   private readonly bottomNavHeight: number = 60
   private chartScroller: Scroller = new Scroller()
+  // 滑动手势相关
+  @State panOffsetX: number = 0
+  private readonly swipeThreshold: number = 80
 
   async aboutToAppear() {
     this.resetHourlyData()
@@ -87,11 +91,27 @@ struct HistoryPage {
     this.loadData()
   }
 
+  private handleSwipeGesture(offsetX: number, velocity: number) {
+    const absOffset = Math.abs(offsetX)
+    const absVelocity = Math.abs(velocity)
+    
+    // 快速滑动或滑动距离足够
+    if (absVelocity > 500 || absOffset > this.swipeThreshold) {
+      if (offsetX > 0) {
+        // 向右滑动 - 切换到设置页面（历史是第1个，向右是第2个设置）
+        router.replaceUrl({ url: 'pages/SettingsPage' })
+      } else if (offsetX < 0) {
+        // 向左滑动 - 切换到首页
+        router.replaceUrl({ url: 'pages/Index' })
+      }
+    }
+  }
+
   build() {
     Column() {
       // 顶部标题栏 - 精致现代风格
       Row() {
-        Column({ space: 2 }) {
+        Row({ space: 10 }) {
           Text('📊')
             .fontSize(28)
           Text('历史记录')
@@ -99,7 +119,7 @@ struct HistoryPage {
             .fontWeight(FontWeight.Bold)
             .fontColor(Theme.COLOR_TEXT_PRIMARY)
         }
-        .alignItems(HorizontalAlign.Start)
+        .alignItems(VerticalAlign.Center)
         
         Blank()
         
@@ -109,7 +129,8 @@ struct HistoryPage {
         }
         .width(48)
         .height(48)
-        .backgroundColor(this.filterOpen ? Theme.COLOR_PRIMARY : Theme.COLOR_SOFT_PURPLE)
+        .backgroundColor(this.filterOpen ? Theme.COLOR_TEXT_PRIMARY : Theme.COLOR_CARD_BACKGROUND)
+        .border({ width: 1, color: Theme.COLOR_BORDER })
         .shadow(Theme.SHADOW_SMALL)
         .onClick(() => {
           if (!this.filterOpen) {
@@ -139,7 +160,7 @@ struct HistoryPage {
             Text(`${this.formatDateShort(this.appliedDate.getTime())} 的专注记录`)
               .fontSize(Theme.FONT_SIZE_SMALL)
               .fontWeight(FontWeight.Medium)
-              .fontColor(Theme.COLOR_PRIMARY)
+              .fontColor(Theme.COLOR_TEXT_PRIMARY)
           }
           Blank()
           Button({ type: ButtonType.Circle }) {
@@ -156,7 +177,8 @@ struct HistoryPage {
         }
         .width('100%')
         .padding({ left: 20, right: 16, top: 12, bottom: 12 })
-        .backgroundColor(Theme.COLOR_PRIMARY_BG)
+        .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+        .border({ width: { bottom: 1 }, color: Theme.COLOR_BORDER })
       }
 
       if (this.filterOpen) {
@@ -239,8 +261,9 @@ struct HistoryPage {
               .height(50)
               .fontSize(Theme.FONT_SIZE_MEDIUM)
               .fontWeight(FontWeight.Bold)
-              .backgroundColor(Theme.COLOR_PRIMARY)
-              .fontColor(Color.White)
+              .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+              .fontColor(Theme.COLOR_TEXT_PRIMARY)
+              .border({ width: 1, color: Theme.COLOR_BORDER })
               .borderRadius(Theme.BORDER_RADIUS_LARGE)
               .shadow(Theme.SHADOW_GLOW)
               .onClick(() => {
@@ -274,7 +297,7 @@ struct HistoryPage {
           LoadingProgress()
             .width(48)
             .height(48)
-            .color(Theme.COLOR_PRIMARY)
+            .color(Theme.COLOR_TEXT_PRIMARY)
           Text('加载中...')
             .fontSize(Theme.FONT_SIZE_MEDIUM)
             .fontColor(Theme.COLOR_TEXT_SECONDARY)
@@ -291,6 +314,16 @@ struct HistoryPage {
     .width('100%')
     .height('100%')
     .backgroundColor(Theme.COLOR_BACKGROUND)
+    .gesture(
+      PanGesture({ direction: PanDirection.Horizontal })
+        .onActionUpdate((event: GestureEvent) => {
+          this.panOffsetX = event.offsetX
+        })
+        .onActionEnd((event: GestureEvent) => {
+          this.handleSwipeGesture(event.offsetX, event.velocityX)
+          this.panOffsetX = 0
+        })
+    )
   }
 
   @Builder
@@ -309,7 +342,8 @@ struct HistoryPage {
           .width(100)
           .height(100)
           .borderRadius(50)
-          .backgroundColor(Theme.COLOR_SOFT_PURPLE)
+          .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+          .border({ width: 1, color: Theme.COLOR_BORDER })
           .justifyContent(FlexAlign.Center)
           
           Text('暂无完成的任务')
@@ -352,7 +386,7 @@ struct HistoryPage {
           Column()
             .width(14)
             .height(14)
-            .backgroundColor('#F59E0B')
+            .backgroundColor(Theme.COLOR_TEXT_SECONDARY)
             .borderRadius(7)
           Text('休息')
             .fontSize(Theme.FONT_SIZE_SMALL)
@@ -362,7 +396,7 @@ struct HistoryPage {
           Column()
             .width(14)
             .height(14)
-            .backgroundColor(Theme.COLOR_PRIMARY)
+            .backgroundColor(Theme.COLOR_TEXT_PRIMARY)
             .borderRadius(7)
           Text('专注')
             .fontSize(Theme.FONT_SIZE_SMALL)
@@ -407,12 +441,12 @@ struct HistoryPage {
                   Column()
                     .width(this.chartBarWidth)
                     .height(this.getStackRestHeight(index))
-                    .backgroundColor('#F59E0B')
+                    .backgroundColor(Theme.COLOR_TEXT_SECONDARY)
                     .borderRadius(6)
                   Column()
                     .width(this.chartBarWidth)
                     .height(this.getStackFocusHeight(index))
-                    .backgroundColor(Theme.COLOR_PRIMARY)
+                    .backgroundColor(Theme.COLOR_TEXT_PRIMARY)
                     .borderRadius(6)
                 }
                 .justifyContent(FlexAlign.End)
@@ -454,7 +488,7 @@ struct HistoryPage {
         Column()
           .width(4)
           .height(44)
-          .backgroundColor(Theme.COLOR_PRIMARY)
+          .backgroundColor(Theme.COLOR_TEXT_PRIMARY)
           .borderRadius(2)
         
         Column({ space: 6 }) {
@@ -469,10 +503,11 @@ struct HistoryPage {
               Text('进行中')
                 .fontSize(Theme.FONT_SIZE_TINY)
                 .fontWeight(FontWeight.Medium)
-                .fontColor(Theme.COLOR_PRIMARY)
+                .fontColor(Theme.COLOR_TEXT_PRIMARY)
                 .padding({ left: 8, right: 8, top: 4, bottom: 4 })
                 .borderRadius(Theme.BORDER_RADIUS_SMALL)
-                .backgroundColor(Theme.COLOR_PRIMARY_BG)
+                .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+                .border({ width: 1, color: Theme.COLOR_BORDER })
             }
           }
           if (!(this.appliedDate && this.isTaskIncomplete(session.taskId))) {
@@ -489,16 +524,21 @@ struct HistoryPage {
           Text(this.formatDurationShort(session.actualFocusDuration))
             .fontSize(Theme.FONT_SIZE_LARGE)
             .fontWeight(FontWeight.Bold)
-            .fontColor(Theme.COLOR_PRIMARY)
+            .fontColor(Theme.COLOR_TEXT_PRIMARY)
           Text('专注时长')
             .fontSize(Theme.FONT_SIZE_TINY)
             .fontColor(Theme.COLOR_TEXT_TERTIARY)
         }
 
-        Text(this.isSessionExpanded(session.id) ? '∨' : '›')
-          .fontSize(Theme.FONT_SIZE_LARGE)
-          .fontColor(Theme.COLOR_TEXT_TERTIARY)
-          .margin({ left: 10 })
+        Stack({ alignContent: Alignment.Center }) {
+          Text(this.isSessionExpanded(session.id) ? '⌄' : '〉')
+            .fontSize(Theme.FONT_SIZE_LARGE)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(Theme.COLOR_TEXT_TERTIARY)
+        }
+        .width(24)
+        .height(24)
+        .margin({ left: 10 })
       }
       .width('100%')
 
@@ -536,7 +576,7 @@ struct HistoryPage {
               Text(this.formatDurationShort(session.actualFocusDuration))
                 .fontSize(Theme.FONT_SIZE_MEDIUM)
                 .fontWeight(FontWeight.Medium)
-                .fontColor(Theme.COLOR_PRIMARY)
+                .fontColor(Theme.COLOR_TEXT_PRIMARY)
             }
             .layoutWeight(1)
             .alignItems(HorizontalAlign.Start)
@@ -570,7 +610,7 @@ struct HistoryPage {
               Text(this.formatDurationShort(this.getRestDuration(session)))
                 .fontSize(Theme.FONT_SIZE_MEDIUM)
                 .fontWeight(FontWeight.Medium)
-                .fontColor('#F59E0B')
+                .fontColor(Theme.COLOR_TEXT_SECONDARY)
             }
             .layoutWeight(1)
             .alignItems(HorizontalAlign.Start)

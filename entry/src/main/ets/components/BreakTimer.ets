@@ -31,14 +31,14 @@ export struct BreakTimer {
           })
             .width(240)
             .height(240)
-            .color(Theme.COLOR_SUCCESS)
+            .color(Theme.COLOR_TEXT_PRIMARY)
             .style({ strokeWidth: 12 })
 
           // 中心时间显示
           Column() {
             Text(this.formatCountdown(this.plannedDurationMs - this.elapsedMs))
               .fontSize(56)
-              .fontColor(Theme.COLOR_SUCCESS)
+              .fontColor(Theme.COLOR_TEXT_PRIMARY)
               .fontWeight(FontWeight.Bold)
               .fontFamily('monospace')
 
@@ -54,7 +54,9 @@ export struct BreakTimer {
         Row({ space: Theme.SPACE_MEDIUM }) {
           Button('跳过休息')
             .fontSize(Theme.FONT_SIZE_MEDIUM)
-            .backgroundColor(Theme.COLOR_WARNING)
+            .fontColor(Theme.COLOR_TEXT_PRIMARY)
+            .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+            .border({ width: 1, color: Theme.COLOR_BORDER })
             .borderRadius(Theme.BORDER_RADIUS_LARGE)
             .height(48)
             .layoutWeight(1)
@@ -72,7 +74,9 @@ export struct BreakTimer {
 
           Button('延长 5 分钟')
             .fontSize(Theme.FONT_SIZE_MEDIUM)
-            .backgroundColor(Theme.COLOR_PRIMARY)
+            .fontColor(Theme.COLOR_TEXT_PRIMARY)
+            .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+            .border({ width: 1, color: Theme.COLOR_BORDER })
             .borderRadius(Theme.BORDER_RADIUS_LARGE)
             .height(48)
             .layoutWeight(1)

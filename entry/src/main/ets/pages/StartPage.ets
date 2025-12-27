@@ -90,7 +90,7 @@ struct StartPage {
             LoadingProgress()
               .width(48)
               .height(48)
-              .color(Theme.COLOR_PRIMARY)
+              .color(Theme.COLOR_TEXT_PRIMARY)
             Text('加载中...')
               .fontSize(Theme.FONT_SIZE_MEDIUM)
               .fontColor(Theme.COLOR_TEXT_SECONDARY)
@@ -111,7 +111,7 @@ struct StartPage {
                   .fontColor(Theme.COLOR_TEXT_PRIMARY)
                 Text('*')
                   .fontSize(Theme.FONT_SIZE_MEDIUM)
-                  .fontColor(Theme.COLOR_ERROR)
+                  .fontColor(Theme.COLOR_TEXT_PRIMARY)
               }
 
               TextInput({ placeholder: '给你的任务起个名字...', text: this.taskTitle })
@@ -119,7 +119,7 @@ struct StartPage {
                 .height(56)
                 .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
                 .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-                .border({ width: 1.5, color: this.taskTitle.trim().length > 0 ? Theme.COLOR_PRIMARY : Theme.COLOR_BORDER })
+                .border({ width: 1.5, color: Theme.COLOR_BORDER })
                 .padding({ left: 18, right: 18 })
                 .fontSize(Theme.FONT_SIZE_MEDIUM)
                 .onChange((value: string) => {
@@ -165,7 +165,8 @@ struct StartPage {
               .width(48)
               .height(48)
               .borderRadius(24)
-              .backgroundColor(Theme.COLOR_PRIMARY_BG)
+              .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+              .border({ width: 1, color: Theme.COLOR_BORDER })
               .justifyContent(FlexAlign.Center)
 
               Column({ space: 4 }) {
@@ -182,7 +183,8 @@ struct StartPage {
             }
             .width('100%')
             .padding(16)
-            .backgroundColor(Theme.COLOR_SOFT_PURPLE)
+.backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+              .border({ width: 1, color: Theme.COLOR_BORDER })
             .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
 
             Blank()
@@ -194,11 +196,12 @@ struct StartPage {
                 .height(58)
                 .fontSize(Theme.FONT_SIZE_LARGE)
                 .fontWeight(FontWeight.Bold)
-                .fontColor(Color.White)
-                .backgroundColor(this.taskTitle.trim().length > 0 ? Theme.COLOR_PRIMARY : Theme.COLOR_TEXT_LIGHT)
+                .fontColor(this.taskTitle.trim().length > 0 ? Theme.COLOR_TEXT_PRIMARY : Theme.COLOR_TEXT_TERTIARY)
+                .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+                .border({ width: 1, color: this.taskTitle.trim().length > 0 ? Theme.COLOR_BORDER : Theme.COLOR_TEXT_LIGHT })
                 .borderRadius(Theme.BORDER_RADIUS_XLARGE)
                 .enabled(!this.saving && this.taskTitle.trim().length > 0)
-                .shadow(this.taskTitle.trim().length > 0 ? Theme.SHADOW_GLOW : Theme.SHADOW_SMALL)
+                .shadow(Theme.SHADOW_SMALL)
                 .onClick(() => {
                   if (this.taskId !== null) {
                     this.saveTask()

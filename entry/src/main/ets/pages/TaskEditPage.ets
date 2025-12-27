@@ -68,7 +68,9 @@ struct TaskEditPage {
           .width('100%')
           .height(50)
           .fontSize(Theme.FONT_SIZE_MEDIUM)
-          .backgroundColor(Theme.COLOR_PRIMARY)
+          .fontColor(Theme.COLOR_TEXT_PRIMARY)
+          .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+          .border({ width: 1, color: Theme.COLOR_BORDER })
           .onClick(() => {
             this.createTask()
           })
