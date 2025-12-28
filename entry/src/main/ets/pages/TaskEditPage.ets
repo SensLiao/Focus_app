@@ -3,6 +3,7 @@
  */
 
 import router from '@ohos.router'
+import inputMethod from '@ohos.inputMethod'
 import promptAction from '@ohos.promptAction'
 import { TaskStore } from '../store/taskStore'
 import { Theme } from '../common/theme'
@@ -12,6 +13,14 @@ import { Theme } from '../common/theme'
 struct TaskEditPage {
   @State title: string = ''
   @State description: string = ''
+
+  private hideKeyboard() {
+    try {
+      inputMethod.getController().hideTextInput()
+    } catch (e) {
+      // Ignore when keyboard is not available.
+    }
+  }
 
   build() {
     Column() {
@@ -82,6 +91,11 @@ struct TaskEditPage {
     .width('100%')
     .height('100%')
     .backgroundColor(Theme.COLOR_BACKGROUND)
+    .onTouch((event: TouchEvent) => {
+      if (event.type === TouchType.Down) {
+        this.hideKeyboard()
+      }
+    })
   }
 
   private async createTask() {

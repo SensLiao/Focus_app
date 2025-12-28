@@ -100,34 +100,17 @@ struct Index {
         // 顶部标题栏 - 更大字体和优雅渐变
         Column() {
           Row() {
-            Column({ space: 4 }) {
-              Text('待办任务')
-                .fontSize(Theme.FONT_SIZE_TITLE)
-                .fontWeight(FontWeight.Bold)
-                .fontColor(Theme.COLOR_TEXT_PRIMARY)
-              Text(this.getGreeting())
-                .fontSize(Theme.FONT_SIZE_SMALL)
-                .fontColor(Theme.COLOR_TEXT_SECONDARY)
-            }
-            .alignItems(HorizontalAlign.Start)
+            Text('待办任务')
+              .fontSize(Theme.FONT_SIZE_LARGE)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(Theme.COLOR_TEXT_PRIMARY)
 
             Blank()
 
-            // 任务数量徽章 - 红色圆点提示（类似微信）
-            if (this.taskState.tasks.length > 0) {
-              Column() {
-                Text(`${this.taskState.tasks.length}`)
-                  .fontSize(Theme.FONT_SIZE_SMALL)
-                  .fontWeight(FontWeight.Bold)
-                  .fontColor(Color.White)
-              }
-              .width(this.taskState.tasks.length > 9 ? 44 : 36)
-              .height(36)
-              .borderRadius(18)
-              .backgroundColor('#FF3B30')
-              .justifyContent(FlexAlign.Center)
-              .padding({ left: 4, right: 4 })
-            }
+            Text(this.getGreeting())
+              .fontSize(Theme.FONT_SIZE_SMALL)
+              .fontColor(Theme.COLOR_TEXT_SECONDARY)
+              .textAlign(TextAlign.End)
           }
           .width('100%')
           .padding({ left: 20, right: 20, top: 16, bottom: 16 })
@@ -144,210 +127,202 @@ struct Index {
           curve: Curve.EaseOut
         })
 
-        if (this.taskState.loading) {
+        Stack({ alignContent: Alignment.BottomEnd }) {
           Column() {
-            LoadingProgress()
-              .width(48)
-              .height(48)
-              .color(Theme.COLOR_TEXT_PRIMARY)
-            Text('加载中...')
-              .fontSize(Theme.FONT_SIZE_MEDIUM)
-              .fontColor(Theme.COLOR_TEXT_SECONDARY)
-              .margin({ top: 16 })
-          }
-          .layoutWeight(1)
-          .justifyContent(FlexAlign.Center)
-        } else if (this.taskState.tasks.length === 0) {
-          // 空状态 - 更精致的设计
-          Column({ space: 20 }) {
-            // 大图标
-            Column() {
-              Text('📝')
-                .fontSize(80)
-            }
-            .width(140)
-            .height(140)
-            .borderRadius(70)
-            .backgroundColor(Theme.COLOR_DIVIDER)
-            .justifyContent(FlexAlign.Center)
+            if (this.taskState.loading) {
+              Column() {
+                LoadingProgress()
+                  .width(48)
+                  .height(48)
+                  .color(Theme.COLOR_TEXT_PRIMARY)
+                Text('???...')
+                  .fontSize(Theme.FONT_SIZE_MEDIUM)
+                  .fontColor(Theme.COLOR_TEXT_SECONDARY)
+                  .margin({ top: 16 })
+              }
+              .height('100%')
+              .justifyContent(FlexAlign.Center)
+            } else if (this.taskState.tasks.length === 0) {
+              // ??? - ??????
+              Column({ space: 20 }) {
+                // ???
+                Column() {
+                  Text('📝')
+                    .fontSize(80)
+                }
+                .width(140)
+                .height(140)
+                .borderRadius(70)
+                .backgroundColor(Theme.COLOR_DIVIDER)
+                .justifyContent(FlexAlign.Center)
 
-            Text('暂无任务')
-              .fontSize(Theme.FONT_SIZE_LARGE)
-              .fontWeight(FontWeight.Bold)
-              .fontColor(Theme.COLOR_TEXT_PRIMARY)
+                Text('暂无任务')
+                  .fontSize(Theme.FONT_SIZE_LARGE)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor(Theme.COLOR_TEXT_PRIMARY)
 
-            Text('添加你的第一个任务\n开始专注之旅吧！')
-              .fontSize(Theme.FONT_SIZE_MEDIUM)
-              .fontColor(Theme.COLOR_TEXT_SECONDARY)
-              .textAlign(TextAlign.Center)
-              .lineHeight(28)
+                Text('添加你的第一个任务\n开始专注之旅吧！')
+                  .fontSize(Theme.FONT_SIZE_MEDIUM)
+                  .fontColor(Theme.COLOR_TEXT_SECONDARY)
+                  .textAlign(TextAlign.Center)
+                  .lineHeight(28)
 
-            Button('无任务专注')
-              .height(56)
-              .fontSize(Theme.FONT_SIZE_MEDIUM)
-              .fontWeight(FontWeight.Medium)
-              .backgroundColor(Theme.COLOR_BACKGROUND)
-              .fontColor(Theme.COLOR_TEXT_SECONDARY)
-              .borderRadius(Theme.BORDER_RADIUS_LARGE)
-              .border({ width: 1, color: Theme.COLOR_BORDER })
-              .margin({ top: 12 })
-              .onClick(() => {
-                this.startFocusWithoutTask()
-              })
-          }
-          .layoutWeight(1)
-          .justifyContent(FlexAlign.Center)
-          .padding({ left: 32, right: 32 })
-        } else {
-          List({ space: 10 }) {
-            ForEach(this.taskState.tasks, (task: Task, index: number) => {
-              ListItem() {
-                Row({ space: 12 }) {
-                  // 左侧装饰条
-                  Column()
-                    .width(3)
-                    .height('30%')
-                    .borderRadius(2)
-                    .backgroundColor(this.isActiveTask(task) ? Theme.COLOR_TEXT_PRIMARY : Theme.COLOR_BORDER)
-
-                  Column({ space: 4 }) {
-                    Row({ space: 8 }) {
-                      Text(task.title)
-                        .fontSize(Theme.FONT_SIZE_MEDIUM)
-                        .fontWeight(FontWeight.Medium)
-                        .fontColor(Theme.COLOR_TEXT_PRIMARY)
-                        .maxLines(1)
-                        .textOverflow({ overflow: TextOverflow.Ellipsis })
-                        .layoutWeight(1)
-
-                      // 活跃任务标签
-                      if (this.isActiveTask(task)) {
-                        Row({ space: 4 }) {
-                          Circle()
-                            .width(8)
-                            .height(8)
-                            .fill(Theme.COLOR_TEXT_TERTIARY)
-                          Text(this.isRestingTask(task) ? '休息中' : '进行中')
-                            .fontSize(Theme.FONT_SIZE_TINY)
-                            .fontColor(Theme.COLOR_TEXT_SECONDARY)
-                        }
-                        .padding({ left: 10, right: 10, top: 4, bottom: 4 })
-                        .backgroundColor(Theme.COLOR_DIVIDER)
-                        .borderRadius(Theme.BORDER_RADIUS_FULL)
-                      }
-                    }
-
-                    if (task.description) {
-                      Text(task.description)
-                        .fontSize(Theme.FONT_SIZE_SMALL)
-                        .fontColor(Theme.COLOR_TEXT_SECONDARY)
-                        .maxLines(1)
-                        .textOverflow({ overflow: TextOverflow.Ellipsis })
-                    }
-
-                    Row({ space: 6 }) {
-                      Text('⏱')
-                        .fontSize(Theme.FONT_SIZE_TINY)
-                      Text(`专注时长: ${this.formatDuration(task.totalFocusTime)}`)
-                        .fontSize(Theme.FONT_SIZE_SMALL)
-                        .fontColor(Theme.COLOR_TEXT_TERTIARY)
-                    }
-                  }
-                  .layoutWeight(1)
-                  .alignItems(HorizontalAlign.Start)
-
-                  if (this.isEditMode) {
+                Button('无任务专注')
+                  .height(56)
+                  .fontSize(Theme.FONT_SIZE_MEDIUM)
+                  .fontWeight(FontWeight.Medium)
+                  .backgroundColor(Theme.COLOR_BACKGROUND)
+                  .fontColor(Theme.COLOR_TEXT_SECONDARY)
+                  .borderRadius(Theme.BORDER_RADIUS_LARGE)
+                  .border({ width: 1, color: Theme.COLOR_BORDER })
+                  .margin({ top: 12 })
+                  .onClick(() => {
+                    this.startFocusWithoutTask()
+                  })
+              }
+              .height('100%')
+              .justifyContent(FlexAlign.Center)
+              .padding({ left: 32, right: 32 })
+            } else {
+              List({ space: 10 }) {
+                ForEach(this.taskState.tasks, (task: Task, index: number) => {
+                  ListItem() {
                     Row({ space: 10 }) {
-                      Button({ type: ButtonType.Normal }) {
-                        Image($r('app.media.sub_task_change'))
-                          .width(24)
-                          .height(24)
-                      }
-                      .width(44)
-                      .height(44)
-                      .backgroundColor(Theme.COLOR_DIVIDER)
-                      .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
-                      .onClick(() => {
-                        this.goToTaskForm(task)
-                      })
+                      Column({ space: 4 }) {
+                        Row({ space: 8 }) {
+                          Text(task.title)
+                            .fontSize(Theme.FONT_SIZE_MEDIUM)
+                            .fontWeight(FontWeight.Medium)
+                            .fontColor(Theme.COLOR_TEXT_PRIMARY)
+                            .maxLines(1)
+                            .textOverflow({ overflow: TextOverflow.Ellipsis })
+                            .layoutWeight(1)
 
-                      Button({ type: ButtonType.Normal }) {
-                        Image($r('app.media.delete_icon'))
-                          .width(24)
-                          .height(24)
+                          // Active status
+                          if (this.isActiveTask(task) && !this.isRestingTask(task)) {
+                            Row({ space: 4 }) {
+                              Circle()
+                                .width(8)
+                                .height(8)
+                                .fill(Theme.COLOR_TEXT_TERTIARY)
+                              Text('专注中')
+                                .fontSize(Theme.FONT_SIZE_TINY)
+                                .fontColor(Theme.COLOR_TEXT_SECONDARY)
+                            }
+                            .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+                            .backgroundColor(Theme.COLOR_DIVIDER)
+                            .borderRadius(Theme.BORDER_RADIUS_FULL)
+                          }
+                        }
+
+                        Row({ space: 6 }) {
+                          Text('⏱')
+                            .fontSize(Theme.FONT_SIZE_TINY)
+                          Text(`专注时长: ${this.formatDuration(task.totalFocusTime)}`)
+                            .fontSize(Theme.FONT_SIZE_SMALL)
+                            .fontColor(Theme.COLOR_TEXT_TERTIARY)
+                        }
                       }
-                      .width(44)
-                      .height(44)
-                      .backgroundColor(Theme.COLOR_DIVIDER)
-                      .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
-                      .onClick(() => {
-                        this.deleteTarget = task
-                        this.confirmDelete()
-                      })
+                      .layoutWeight(1)
+                      .alignItems(HorizontalAlign.Start)
+
+                      if (this.isEditMode) {
+                        Row({ space: 10 }) {
+                          Button({ type: ButtonType.Normal }) {
+                            Image($r('app.media.sub_task_change'))
+                              .width(24)
+                              .height(24)
+                          }
+                          .width(44)
+                          .height(44)
+                          .backgroundColor(Theme.COLOR_DIVIDER)
+                          .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
+                          .onClick(() => {
+                            this.goToTaskForm(task)
+                          })
+
+                          Button({ type: ButtonType.Normal }) {
+                            Image($r('app.media.delete_icon'))
+                              .width(24)
+                              .height(24)
+                          }
+                          .width(44)
+                          .height(44)
+                          .backgroundColor(Theme.COLOR_DIVIDER)
+                          .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
+                          .onClick(() => {
+                            this.deleteTarget = task
+                            this.confirmDelete()
+                          })
+                        }
+                      } else {
+                        // ???? - ??????
+                        Button({ type: ButtonType.Circle }) {
+                          Text('☕')
+                            .fontSize(24)
+                        }
+                        .width(52)
+                        .height(52)
+                        .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+                        .border({ width: 1, color: Theme.COLOR_BORDER })
+                        .shadow(Theme.SHADOW_SMALL)
+                        .onClick(() => {
+                          if (this.isActiveTask(task)) {
+                            this.resumeActiveTask(task)
+                          } else {
+                            this.startFocusWithTask(task)
+                          }
+                        })
+                      }
                     }
-                  } else {
-                    // 播放按钮 - 使用图片资源
-                    Button({ type: ButtonType.Circle }) {
-                      Image($r('app.media.start_button'))
-                        .width(24)
-                        .height(24)
-                    }
-                    .width(44)
-                    .height(44)
+                    .width('100%')
+                    .padding({ left: 28, right: 28, top: 20, bottom: 20 })
                     .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-                    .border({ width: 1, color: Theme.COLOR_BORDER })
+                    .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
                     .shadow(Theme.SHADOW_SMALL)
                     .onClick(() => {
+                      if (this.isEditMode) {
+                        return
+                      }
                       if (this.isActiveTask(task)) {
                         this.resumeActiveTask(task)
                       } else {
                         this.startFocusWithTask(task)
                       }
                     })
+                    .opacity(this.listItemsLoaded ? 1 : 0)
+                    .translate({ y: this.listItemsLoaded ? 0 : 20 })
+                    .animation({
+                      duration: Theme.ANIMATION_NORMAL,
+                      delay: index * 50,
+                      curve: Curve.EaseOut
+                    })
                   }
-                }
-                .width('100%')
-                .padding({ left: 14, right: 14, top: 10, bottom: 10 })
-                .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-                .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
-                .shadow(Theme.SHADOW_SMALL)
-                .opacity(this.listItemsLoaded ? 1 : 0)
-                .translate({ y: this.listItemsLoaded ? 0 : 20 })
-                .animation({
-                  duration: Theme.ANIMATION_NORMAL,
-                  delay: index * 50,
-                  curve: Curve.EaseOut
-                })
+                }, (task: Task) => task.id.toString())
               }
-            }, (task: Task) => task.id.toString())
+              .width('100%')
+              .height('100%')
+              .padding({ left: 16, right: 16, top: 8, bottom: Theme.SPACE_SMALL })
+            }
           }
           .width('100%')
-          .layoutWeight(1)
-          .padding({ left: 16, right: 16, top: 14, bottom: 90 })
-        }
-
-        BottomNav({ currentIndex: 0 })
-      }
-      .width('100%')
-      .height('100%')
-      .backgroundColor(Theme.COLOR_BACKGROUND)
-
-      // 右下角按钮组
+          .height('100%')
+          .position({ x: 0, y: 0 })
       Column({ space: 12 }) {
         // 编辑模式按钮
         Button({ type: ButtonType.Circle }) {
           if (this.isEditMode) {
             Text('✕')
-              .fontSize(26)
+              .fontSize(34)
               .fontColor(Theme.COLOR_TEXT_PRIMARY)
           } else {
             Image($r('app.media.editor_task'))
-              .width(28)
-              .height(28)
+              .width(40)
+              .height(40)
           }
         }
-        .width(56)
-        .height(56)
+        .width(78)
+        .height(78)
         .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
         .border({ width: 1, color: Theme.COLOR_BORDER })
         .shadow(Theme.SHADOW_MEDIUM)
@@ -358,12 +333,12 @@ struct Index {
         // 添加任务按钮
         Button({ type: ButtonType.Circle }) {
           Text('+')
-            .fontSize(36)
+            .fontSize(48)
             .fontWeight(FontWeight.Normal)
             .fontColor(Theme.COLOR_TEXT_PRIMARY)
         }
-        .width(64)
-        .height(64)
+        .width(86)
+        .height(86)
         .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
         .border({ width: 1, color: Theme.COLOR_BORDER })
         .shadow(Theme.SHADOW_MEDIUM)
@@ -371,7 +346,17 @@ struct Index {
           this.goToTaskForm()
         })
       }
-      .margin({ right: 20, bottom: 100 })
+      .margin({ right: 20, bottom: 16 })
+        }
+        .layoutWeight(1)
+        .width('100%')
+
+
+        BottomNav({ currentIndex: 0 })
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(Theme.COLOR_BACKGROUND)
 
       if (this.showRecoverDialog) {
         this.RecoverDialog()
