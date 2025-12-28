@@ -3,6 +3,7 @@
  */
 
 import router from '@ohos.router'
+import inputMethod from '@ohos.inputMethod'
 import { TaskRepo } from '../data/TaskRepo'
 import { SessionRepo } from '../data/SessionRepo'
 import { SegmentRepo } from '../data/SegmentRepo'
@@ -72,19 +73,35 @@ struct HistoryPage {
   @State appliedDate: Date | null = null
   @State hourlyFocus: number[] = []
   @State hourlyRest: number[] = []
-  private readonly chartHeight: number = 180
+  @State headerOpacity: number = 0
+  @State contentOpacity: number = 0
+  private readonly chartHeight: number = 140
+  private readonly axisBaselineOffset: number = 5
   private readonly chartMaxMinutes: number = 60
-  private readonly chartItemWidth: number = 30
+  private readonly chartItemWidth: number = 35
   private readonly chartBarWidth: number = 8
-  private readonly bottomNavHeight: number = 60
   private chartScroller: Scroller = new Scroller()
   // 滑动手势相关
   @State panOffsetX: number = 0
   private readonly swipeThreshold: number = 80
 
+  private hideKeyboard() {
+    try {
+      inputMethod.getController().hideTextInput()
+    } catch (e) {
+      // Ignore when keyboard is not available.
+    }
+  }
+
   async aboutToAppear() {
     this.resetHourlyData()
     await this.loadData()
+    setTimeout(() => {
+      this.headerOpacity = 1
+    }, 100)
+    setTimeout(() => {
+      this.contentOpacity = 1
+    }, 200)
   }
 
   onPageShow() {
@@ -113,7 +130,7 @@ struct HistoryPage {
       Row() {
         Row({ space: 10 }) {
           Text('📊')
-            .fontSize(28)
+            .fontSize(Theme.FONT_SIZE_LARGE)
           Text('历史记录')
             .fontSize(Theme.FONT_SIZE_LARGE)
             .fontWeight(FontWeight.Bold)
@@ -143,43 +160,110 @@ struct HistoryPage {
         })
       }
       .width('100%')
-      .padding({ left: 20, right: 20, top: 16, bottom: 16 })
+      .padding({ left: 20, right: 20, top: 10, bottom: 16 })
       .alignItems(VerticalAlign.Center)
       .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
       .border({
         width: { bottom: 1 },
         color: Theme.COLOR_BORDER
       })
+      .opacity(this.headerOpacity)
+      .animation({
+        duration: Theme.ANIMATION_NORMAL,
+        curve: Curve.EaseOut
+      })
 
-      // 过滤状态显示 - 优化样式
-      if (this.appliedDate) {
-        Row({ space: 10 }) {
-          Row({ space: 6 }) {
-            Text('🎯')
-              .fontSize(Theme.FONT_SIZE_SMALL)
-            Text(`${this.formatDateShort(this.appliedDate.getTime())} 的专注记录`)
-              .fontSize(Theme.FONT_SIZE_SMALL)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(Theme.COLOR_TEXT_PRIMARY)
+      Column() {
+        if (this.loading) {
+          Column() {
+            LoadingProgress()
+              .width(48)
+              .height(48)
+              .color(Theme.COLOR_TEXT_PRIMARY)
+            Text('加载中...')
+              .fontSize(Theme.FONT_SIZE_MEDIUM)
+              .fontColor(Theme.COLOR_TEXT_SECONDARY)
+              .margin({ top: 16 })
           }
-          Blank()
-          Button({ type: ButtonType.Circle }) {
-            Text('✕')
+          .layoutWeight(1)
+          .justifyContent(FlexAlign.Center)
+        } else {
+          this.CompletedSessionsContent()
+        }
+      }
+      .layoutWeight(1)
+      .width('100%')
+      .opacity(this.contentOpacity)
+      .animation({
+        duration: Theme.ANIMATION_NORMAL,
+        curve: Curve.EaseOut
+      })
+
+      BottomNav({ currentIndex: 1 })
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(Theme.COLOR_BACKGROUND)
+    .onTouch((event: TouchEvent) => {
+      if (event.type === TouchType.Down) {
+        this.hideKeyboard()
+      }
+    })
+    .gesture(
+      PanGesture({ direction: PanDirection.Horizontal })
+        .onActionUpdate((event: GestureEvent) => {
+          this.panOffsetX = event.offsetX
+        })
+        .onActionEnd((event: GestureEvent) => {
+          this.handleSwipeGesture(event.offsetX, event.velocityX)
+          this.panOffsetX = 0
+        })
+    )
+  }
+
+  @Builder
+  CompletedSessionsContent() {
+    Stack() {
+      Column({ space: Theme.SPACE_MEDIUM }) {
+        if (this.appliedDate) {
+          this.HourlyChart()
+        }
+
+        if (this.getVisibleSessions().length === 0) {
+          Column({ space: 16 }) {
+            Column() {
+              Text('📭')
+                .fontSize(56)
+            }
+            .width(100)
+            .height(100)
+            .borderRadius(50)
+            .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
+            .border({ width: 1, color: Theme.COLOR_BORDER })
+            .justifyContent(FlexAlign.Center)
+            
+            Text('暂无完成的任务')
+              .fontSize(Theme.FONT_SIZE_LARGE)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(Theme.COLOR_TEXT_SECONDARY)
+            Text('完成专注后，记录会显示在这里')
               .fontSize(Theme.FONT_SIZE_SMALL)
               .fontColor(Theme.COLOR_TEXT_TERTIARY)
           }
-          .width(28)
-          .height(28)
-          .backgroundColor(Theme.COLOR_BACKGROUND)
-          .onClick(() => {
-            this.clearFilter()
-          })
+          .justifyContent(FlexAlign.Center)
+          .layoutWeight(1)
+        } else {
+          List({ space: Theme.SPACE_MEDIUM }) {
+            ForEach(this.getVisibleSessions(), (session: FocusSession) => {
+              ListItem() {
+                this.SessionCard(session)
+              }
+            }, (session: FocusSession) => session.id.toString())
+          }
+          .width('100%')
         }
-        .width('100%')
-        .padding({ left: 20, right: 16, top: 12, bottom: 12 })
-        .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-        .border({ width: { bottom: 1 }, color: Theme.COLOR_BORDER })
       }
+      .width('100%')
 
       if (this.filterOpen) {
         Column({ space: 16 }) {
@@ -290,81 +374,9 @@ struct HistoryPage {
           width: { bottom: 1 },
           color: Theme.COLOR_BORDER
         })
-      }
-
-      if (this.loading) {
-        Column() {
-          LoadingProgress()
-            .width(48)
-            .height(48)
-            .color(Theme.COLOR_TEXT_PRIMARY)
-          Text('加载中...')
-            .fontSize(Theme.FONT_SIZE_MEDIUM)
-            .fontColor(Theme.COLOR_TEXT_SECONDARY)
-            .margin({ top: 16 })
-        }
-        .layoutWeight(1)
-        .justifyContent(FlexAlign.Center)
-      } else {
-        this.CompletedSessionsContent()
-      }
-
-      BottomNav({ currentIndex: 1 })
-    }
-    .width('100%')
-    .height('100%')
-    .backgroundColor(Theme.COLOR_BACKGROUND)
-    .gesture(
-      PanGesture({ direction: PanDirection.Horizontal })
-        .onActionUpdate((event: GestureEvent) => {
-          this.panOffsetX = event.offsetX
-        })
-        .onActionEnd((event: GestureEvent) => {
-          this.handleSwipeGesture(event.offsetX, event.velocityX)
-          this.panOffsetX = 0
-        })
-    )
-  }
-
-  @Builder
-  CompletedSessionsContent() {
-    Column({ space: Theme.SPACE_LARGE }) {
-      if (this.appliedDate) {
-        this.HourlyChart()
-      }
-
-      if (this.getVisibleSessions().length === 0) {
-        Column({ space: 16 }) {
-          Column() {
-            Text('📭')
-              .fontSize(56)
-          }
-          .width(100)
-          .height(100)
-          .borderRadius(50)
-          .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-          .border({ width: 1, color: Theme.COLOR_BORDER })
-          .justifyContent(FlexAlign.Center)
-          
-          Text('暂无完成的任务')
-            .fontSize(Theme.FONT_SIZE_LARGE)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(Theme.COLOR_TEXT_SECONDARY)
-          Text('完成专注后，记录会显示在这里')
-            .fontSize(Theme.FONT_SIZE_SMALL)
-            .fontColor(Theme.COLOR_TEXT_TERTIARY)
-        }
-        .justifyContent(FlexAlign.Center)
-        .layoutWeight(1)
-      } else {
-        List({ space: Theme.SPACE_MEDIUM }) {
-          ForEach(this.getVisibleSessions(), (session: FocusSession) => {
-            ListItem() {
-              this.SessionCard(session)
-            }
-          }, (session: FocusSession) => session.id.toString())
-        }
-        .width('100%')
+        .shadow(Theme.SHADOW_MEDIUM)
+        .position({ x: 0, y: 0 })
+        .zIndex(2)
       }
     }
     .layoutWeight(1)
@@ -373,7 +385,7 @@ struct HistoryPage {
       left: 20,
       right: 20,
       top: Theme.SPACE_MEDIUM,
-      bottom: Theme.SPACE_MEDIUM + this.bottomNavHeight
+      bottom: Theme.SPACE_MEDIUM
     })
   }
 
@@ -381,35 +393,45 @@ struct HistoryPage {
   HourlyChart() {
     Column({ space: 12 }) {
       // 图例
-      Row({ space: 16 }) {
-        Row({ space: 8 }) {
-          Column()
-            .width(14)
-            .height(14)
-            .backgroundColor(Theme.COLOR_TEXT_SECONDARY)
-            .borderRadius(7)
-          Text('休息')
-            .fontSize(Theme.FONT_SIZE_SMALL)
-            .fontColor(Theme.COLOR_TEXT_SECONDARY)
-        }
-        Row({ space: 8 }) {
-          Column()
-            .width(14)
-            .height(14)
-            .backgroundColor(Theme.COLOR_TEXT_PRIMARY)
-            .borderRadius(7)
-          Text('专注')
-            .fontSize(Theme.FONT_SIZE_SMALL)
-            .fontColor(Theme.COLOR_TEXT_SECONDARY)
+      Row() {
+        Text(this.formatDateShort(this.appliedDate!.getTime()))
+          .fontSize(Theme.FONT_SIZE_SMALL)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(Theme.COLOR_TEXT_PRIMARY)
+        Row({ space: 16 }) {
+          Row({ space: 8 }) {
+            Column()
+              .width(14)
+              .height(14)
+              .backgroundColor('#ED820E')
+              .borderRadius(7)
+            Text('休息')
+              .fontSize(Theme.FONT_SIZE_SMALL)
+              .fontColor(Theme.COLOR_TEXT_SECONDARY)
+          }
+          Row({ space: 8 }) {
+            Column()
+              .width(14)
+              .height(14)
+              .backgroundColor(Theme.COLOR_PRIMARY)
+              .borderRadius(7)
+            Text('专注')
+              .fontSize(Theme.FONT_SIZE_SMALL)
+              .fontColor(Theme.COLOR_TEXT_SECONDARY)
+          }
         }
       }
+      .width('100%')
+      .justifyContent(FlexAlign.SpaceBetween)
+      .alignItems(VerticalAlign.Center)
+
+      Text('分钟')
+        .fontSize(Theme.FONT_SIZE_TINY)
+        .fontColor(Theme.COLOR_TEXT_TERTIARY)
+        .margin({ left: 2 })
 
       Row({ space: Theme.SPACE_SMALL }) {
         Column() {
-          Text('分钟')
-            .fontSize(Theme.FONT_SIZE_TINY)
-            .fontColor(Theme.COLOR_TEXT_TERTIARY)
-            .margin({ bottom: 6 })
           Column() {
             Text('60')
               .fontSize(Theme.FONT_SIZE_TINY)
@@ -427,26 +449,26 @@ struct HistoryPage {
               .fontSize(Theme.FONT_SIZE_TINY)
               .fontColor(Theme.COLOR_TEXT_TERTIARY)
           }
-          .height(this.chartHeight)
+          .height(this.chartHeight + this.axisBaselineOffset)
           .justifyContent(FlexAlign.SpaceBetween)
         }
         .width(32)
-        .height(this.chartHeight + 20)
+        .height(this.chartHeight + this.axisBaselineOffset)
 
-        Scroll(this.chartScroller) {
-          Row({ space: 14 }) {
-            ForEach(this.hourlyFocus, (value: number, index: number) => {
-              Column() {
+      Scroll(this.chartScroller) {
+        Row({ space: 0 }) {
+          ForEach(this.hourlyFocus, (value: number, index: number) => {
+            Column() {
                 Column({ space: 0 }) {
                   Column()
                     .width(this.chartBarWidth)
                     .height(this.getStackRestHeight(index))
-                    .backgroundColor(Theme.COLOR_TEXT_SECONDARY)
+                    .backgroundColor('#ED820E')
                     .borderRadius(6)
                   Column()
                     .width(this.chartBarWidth)
                     .height(this.getStackFocusHeight(index))
-                    .backgroundColor(Theme.COLOR_TEXT_PRIMARY)
+                    .backgroundColor(Theme.COLOR_PRIMARY)
                     .borderRadius(6)
                 }
                 .justifyContent(FlexAlign.End)
@@ -469,12 +491,20 @@ struct HistoryPage {
         .layoutWeight(1)
         .scrollable(ScrollDirection.Horizontal)
         .scrollBar(BarState.On)
+        .onAppear(() => {
+          setTimeout(() => {
+            if (this.appliedDate) {
+              this.scrollChartToFirstActiveHour()
+            }
+          }, 0)
+        })
       }
+      .alignItems(VerticalAlign.Top)
       .width('100%')
       .clip(true)
     }
     .width('100%')
-    .padding(Theme.SPACE_LARGE)
+    .padding({ left: Theme.SPACE_LARGE, right: Theme.SPACE_LARGE, top: Theme.SPACE_MEDIUM, bottom: Theme.SPACE_MEDIUM })
     .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
     .borderRadius(Theme.BORDER_RADIUS_LARGE)
     .shadow(Theme.SHADOW_MEDIUM)
@@ -484,13 +514,6 @@ struct HistoryPage {
   SessionCard(session: FocusSession) {
     Column({ space: Theme.SPACE_SMALL }) {
       Row() {
-        // 左侧颜色指示条
-        Column()
-          .width(4)
-          .height(44)
-          .backgroundColor(Theme.COLOR_TEXT_PRIMARY)
-          .borderRadius(2)
-        
         Column({ space: 6 }) {
           Row({ space: 10 }) {
             Text(this.getTaskTitle(session.taskId))
@@ -518,7 +541,6 @@ struct HistoryPage {
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)
-        .margin({ left: 14 })
 
         Column({ space: 4 }) {
           Text(this.formatDurationShort(session.actualFocusDuration))
@@ -531,7 +553,7 @@ struct HistoryPage {
         }
 
         Stack({ alignContent: Alignment.Center }) {
-          Text(this.isSessionExpanded(session.id) ? '⌄' : '〉')
+          Text(this.isSessionExpanded(session.id) ? '▾' : '▸')
             .fontSize(Theme.FONT_SIZE_LARGE)
             .fontWeight(FontWeight.Bold)
             .fontColor(Theme.COLOR_TEXT_TERTIARY)
@@ -814,6 +836,7 @@ struct HistoryPage {
 
   private clearFilter() {
     this.appliedDate = null
+    this.filterOpen = false
     this.resetHourlyData()
   }
 
@@ -866,7 +889,11 @@ struct HistoryPage {
 
     this.hourlyFocus = focus
     this.hourlyRest = rest
-    this.scrollChartToFirstActiveHour()
+    setTimeout(() => {
+      if (this.appliedDate) {
+        this.scrollChartToFirstActiveHour()
+      }
+    }, 0)
   }
 
   private addDurationToHourly(
@@ -979,7 +1006,7 @@ struct HistoryPage {
       this.scrollChartToHour(0)
       return
     }
-    const startHour = Math.max(0, firstActive - 2)
+    const startHour = Math.max(0, firstActive - 4)
     this.scrollChartToHour(startHour)
   }
 }

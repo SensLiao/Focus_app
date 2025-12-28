@@ -2,6 +2,7 @@
  * Timer page - 精致现代风格 (Inspired by Flocus)
  */
 import router from '@ohos.router'
+import inputMethod from '@ohos.inputMethod'
 import promptAction from '@ohos.promptAction'
 import power from '@ohos.power'
 import { FocusStore, FocusState } from '../store/focusStore'
@@ -41,6 +42,7 @@ struct FocusPage {
   @State isIdle: boolean = false
   @State isCountdownMode: boolean = false
   @State countdownMinutes: number = 25
+  @State countdownInput: string = '25'
   @State pendingTaskId: number | null = null
   @State startAnonymous: boolean = false
   @State showPauseWarning: boolean = false
@@ -58,10 +60,12 @@ struct FocusPage {
   @State isModeAnimating: boolean = false
   @State showStartRestPrompt: boolean = false
   @State showBreakEndPrompt: boolean = false
+  @State isFinishing: boolean = false
   @StorageLink('breakEndPromptPending') pendingBreakEndPrompt: boolean = false
   @StorageLink('startRestPromptPending') pendingStartRestPrompt: boolean = false
   @State restIntervalMs: number = 0
   @State restDurationMs: number = 0
+  @State restEnabled: boolean = true
   @State nextRestDueAtMs: number = 0
   // 动画相关状态
   @State showSuccessAnimation: boolean = false
@@ -80,6 +84,15 @@ struct FocusPage {
     FocusStore.init(getContext(this))
     await SettingsService.init(getContext(this))
     this.loadRestSettings()
+    // 入场动画
+    this.headerOpacity = 0
+    this.contentOpacity = 0
+    setTimeout(() => {
+      this.headerOpacity = 1
+    }, 100)
+    setTimeout(() => {
+      this.contentOpacity = 1
+    }, 200)
     await TaskStore.loadTasks()
 
     const params = router.getParams() as RouterParams
@@ -88,6 +101,7 @@ struct FocusPage {
 
     this.focusState = FocusStore.getState()
     this.displayIsBreaking = this.focusState.isBreaking
+    this.countdownInput = this.countdownMinutes.toString()
     if (this.focusState.currentSession && this.nextRestDueAtMs === 0) {
       this.resetNextRestCountdown()
     }
@@ -150,13 +164,16 @@ struct FocusPage {
     }
     AppLifecycleService.register(this.lifecycleListener)
 
-    // 入场动画
-    setTimeout(() => {
-      this.headerOpacity = 1
-    }, 100)
-    setTimeout(() => {
-      this.contentOpacity = 1
-    }, 200)
+  }
+
+  onPageShow() {
+    this.focusState = FocusStore.getState()
+    this.displayIsBreaking = this.focusState.isBreaking
+    if (this.focusState.currentSession) {
+      this.syncTaskMeta()
+    }
+    this.headerOpacity = 1
+    this.contentOpacity = 1
   }
 
   aboutToDisappear() {
@@ -241,6 +258,7 @@ struct FocusPage {
     const settings = SettingsService.getSettings()
     this.restIntervalMs = Math.max(0, settings.defaultRestInterval) * 60 * 1000
     this.restDurationMs = Math.max(0, settings.defaultRestDuration) * 60 * 1000
+    this.restEnabled = settings.restEnabled
   }
 
   private resetNextRestCountdown() {
@@ -341,6 +359,9 @@ struct FocusPage {
   }
 
   private async startSession() {
+    if (this.isFinishing) {
+      return
+    }
     const timeLimitMs = this.isCountdownMode ? this.countdownMinutes * 60 * 1000 : undefined
     const sessionType = this.isCountdownMode ? SessionType.COUNTDOWN : SessionType.NORMAL
     this.loadRestSettings()
@@ -367,6 +388,9 @@ struct FocusPage {
   }
 
   private async onPause() {
+    if (this.isFinishing) {
+      return
+    }
     if (!this.neverShowPauseWarning) {
       this.showPauseWarning = true
       return
@@ -395,7 +419,10 @@ struct FocusPage {
     }
   }
 
-  private async onStartBreak() {
+  private async onStartBreak(autoEnd: boolean) {
+    if (this.isFinishing) {
+      return
+    }
     this.handleModeTransition(true)
     if (this.restPromptTimeoutId !== -1) {
       clearTimeout(this.restPromptTimeoutId)
@@ -408,7 +435,7 @@ struct FocusPage {
       this.loadRestSettings()
     }
     const duration = this.restDurationMs
-    const result = await FocusStore.startBreak(duration)
+    const result = await FocusStore.startBreak(duration, undefined, autoEnd)
     if (result.ok) {
       promptAction.showToast({ message: 'Break started' })
       this.resetNextRestCountdown()
@@ -419,6 +446,9 @@ struct FocusPage {
   }
 
   private async onFinishBreak() {
+    if (this.isFinishing) {
+      return
+    }
     this.handleModeTransition(false)
     const result = await FocusStore.finishBreak()
     if (result.ok) {
@@ -432,19 +462,24 @@ struct FocusPage {
   }
 
   private async onFinish() {
-    const result = await FocusStore.finishFocus()
+    if (this.isFinishing) {
+      return
+    }
+    // Show feedback immediately, but wait for completion before leaving.
+    this.isFinishing = true
+    this.successAnimationType = 'complete'
+    this.successMessage = `Great job! Completed ${this.formatTime(this.getElapsedMs())} focus.`
+    this.showSuccessAnimation = true
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    const finishPromise = FocusStore.finishFocus()
+    const animationDelay = new Promise<void>((resolve) => setTimeout(resolve, 2000))
+    const result = await finishPromise
     if (result.ok) {
-      // 显示完成动画
-      this.successAnimationType = 'complete'
-      this.successMessage = `太棒了！完成了 ${this.formatTime(this.getElapsedMs())} 的专注`
-      this.showSuccessAnimation = true
-      
-      // 等待动画完成后返回
-      setTimeout(() => {
-        promptAction.showToast({ message: '专注完成' })
-        router.back()
-      }, 2000)
-      
+      await animationDelay
+      promptAction.showToast({ message: 'Focus completed' })
+      router.back()
+
       this.isIdle = true
       this.showBreakEndPrompt = false
       this.showStartRestPrompt = false
@@ -457,12 +492,19 @@ struct FocusPage {
       this.nextRestDueAtMs = 0
       await this.loadSessionDetails(this.pendingTaskId ?? this.focusState.currentTaskId ?? undefined)
     } else {
+      this.showSuccessAnimation = false
+      this.isFinishing = false
       promptAction.showToast({ message: result.message ?? 'Complete failed' })
     }
     this.focusState = FocusStore.getState()
   }
 
+
+
   private goBack() {
+    if (this.isFinishing) {
+      return
+    }
     if (this.focusState.currentSession && this.focusState.currentSession.status === SessionStatus.RUNNING) {
       this.showLeaveWarning = true
     } else {
@@ -476,6 +518,41 @@ struct FocusPage {
     }
     const base = this.focusState.currentSession.actualFocusDuration ?? 0
     return base + this.focusState.elapsedTime
+  }
+
+  private getCurrentFocusMs(): number {
+    if (this.viewingOtherTask || !this.focusState.currentSession) {
+      return 0
+    }
+    const base = this.focusState.currentSession.actualFocusDuration ?? 0
+    if (this.focusState.isBreaking || this.focusState.currentSession.status !== SessionStatus.RUNNING) {
+      return base
+    }
+    return base + this.focusState.elapsedTime
+  }
+
+  private getTotalFocusMs(): number {
+    return this.completedFocusOffset + this.getCurrentFocusMs()
+  }
+
+  private getSecondaryTimerLabel(): string {
+    if (this.displayIsBreaking) {
+      return `专注时长: ${this.formatTime(this.getCurrentFocusMs())}`
+    }
+    if (this.restIntervalMs > 0 && !this.viewingOtherTask && this.isRunning()) {
+      return `下次休息: ${this.formatTime(this.getNextRestRemainingMs())}`
+    }
+    return ''
+  }
+
+  private getControlAreaHeight(): number {
+    if (this.isIdle || !this.focusState.currentSession) {
+      return 110
+    }
+    if (this.focusState.isBreaking) {
+      return 60
+    }
+    return 60
   }
 
   private getRestCount(): number {
@@ -515,8 +592,11 @@ struct FocusPage {
       return this.formatTime(0)
     }
     if (this.focusState.isBreaking) {
-      const remaining = Math.max(0, this.focusState.breakDuration - this.focusState.breakElapsedTime)
-      return this.formatTime(remaining)
+      if (this.focusState.breakAutoEnd) {
+        const remaining = Math.max(0, this.focusState.breakDuration - this.focusState.breakElapsedTime)
+        return this.formatTime(remaining)
+      }
+      return this.formatTime(this.focusState.breakElapsedTime)
     }
     const remaining = this.focusState.remainingTime > 0 ? this.focusState.remainingTime : this.getElapsedMs()
     return this.formatTime(remaining)
@@ -597,6 +677,14 @@ struct FocusPage {
     return `${y}-${m}-${day} ${h}:${mi}`
   }
 
+  private hideKeyboard() {
+    try {
+      inputMethod.getController().hideTextInput()
+    } catch (e) {
+      // Ignore when keyboard is not available.
+    }
+  }
+
   build() {
     Stack() {
       Column() {
@@ -610,6 +698,7 @@ struct FocusPage {
           .width(44)
           .height(44)
           .backgroundColor(Theme.COLOR_BACKGROUND)
+          .translate({ x: 0, y: -2 })
           .onClick(() => {
             this.goBack()
           })
@@ -621,17 +710,18 @@ struct FocusPage {
               .fontColor(Theme.COLOR_TEXT_PRIMARY)
               .maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
-            if (this.displayIsBreaking) {
-              Text('休息时间')
-                .fontSize(Theme.FONT_SIZE_SMALL)
-                .fontColor(Theme.COLOR_WARNING)
-            }
+            Text('')
+              .fontSize(Theme.FONT_SIZE_SMALL)
+              .fontColor(Theme.COLOR_WARNING)
+              .height(Theme.FONT_SIZE_SMALL + 4)
+              .opacity(0)
           }
           .layoutWeight(1)
+          .padding({ top: 8 })
           .alignItems(HorizontalAlign.Start)
         }
         .width('100%')
-        .padding({ left: 16, right: 20, top: 12, bottom: 12 })
+        .padding({ left: 16, right: 20, top: 4, bottom: 0 })
         .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
         .border({ width: { bottom: 1 }, color: Theme.COLOR_BORDER })
         .opacity(this.headerOpacity)
@@ -640,27 +730,14 @@ struct FocusPage {
           curve: Curve.EaseOut
         })
 
-        // 任务描述
-        if (this.taskDescription !== '') {
+        Scroll() {
           Column() {
-            Text(this.taskDescription)
-              .fontSize(Theme.FONT_SIZE_SMALL)
-              .fontColor(Theme.COLOR_TEXT_SECONDARY)
-              .maxLines(2)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-          }
-          .width('100%')
-          .padding({ left: 20, right: 20, top: 14, bottom: 14 })
-          .margin({ left: 16, right: 16, top: 14 })
-          .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-          .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
-          .shadow(Theme.SHADOW_SMALL)
-        }
-
-        Column({ space: 28 }) {
-          // 超大计时器显示区域
-          Column() {
-            Stack() {
+            Blank()
+              .height(12)
+            Column({ space: 24 }) {
+              // 超大计时器显示区域
+              Column() {
+                Stack() {
               // 外层装饰环
               Circle()
                 .width(320)
@@ -731,19 +808,18 @@ struct FocusPage {
 
                 // 辅助信息
                 Column({ space: 4 }) {
-                  Text(`总专注: ${this.formatTime(this.completedFocusOffset + this.getElapsedMs())}`)
+                  Text(`总专注: ${this.formatTime(this.getTotalFocusMs())}`)
                     .fontSize(Theme.FONT_SIZE_SMALL)
-                    .fontColor(Theme.COLOR_TEXT_TERTIARY)
+                    .fontColor(Theme.COLOR_TEXT_PRIMARY)
 
-                  if (!this.displayIsBreaking && this.restIntervalMs > 0 && !this.viewingOtherTask && this.isRunning()) {
-                    Text(`下次休息: ${this.formatTime(this.getNextRestRemainingMs())}`)
-                      .fontSize(Theme.FONT_SIZE_TINY)
-                      .fontColor(Theme.COLOR_TEXT_LIGHT)
-                  }
+                  Text(this.getSecondaryTimerLabel() === '' ? ' ' : this.getSecondaryTimerLabel())
+                    .fontSize(Theme.FONT_SIZE_SMALL)
+                    .fontColor(Theme.COLOR_TEXT_PRIMARY)
+                    .opacity(this.getSecondaryTimerLabel() === '' ? 0 : 1)
                 }
               }
             }
-            .margin({ top: 24 })
+            .margin({ top: 0 })
           }
           .width('100%')
           .justifyContent(FlexAlign.Center)
@@ -754,143 +830,155 @@ struct FocusPage {
           })
 
           // 控制按钮区域
-          if (this.isIdle || !this.focusState.currentSession) {
-            Column({ space: 20 }) {
-              // 倒计时模式切换
-              Row() {
-                Row({ space: 12 }) {
-                  Toggle({ type: ToggleType.Switch, isOn: this.isCountdownMode })
-                    .selectedColor(Theme.COLOR_PRIMARY)
-                    .width(52)
-                    .height(28)
-                    .onChange((isOn: boolean) => {
-                      this.isCountdownMode = isOn
-                    })
-                  Text('倒计时模式')
-                    .fontSize(Theme.FONT_SIZE_MEDIUM)
-                    .fontColor(Theme.COLOR_TEXT_SECONDARY)
-                }
+          Column() {
+            if (this.isIdle || !this.focusState.currentSession) {
+              Column({ space: 10 }) {
+                // 倒计时模式切换
+                Row() {
+                  Row({ space: 12 }) {
+                    Toggle({ type: ToggleType.Switch, isOn: this.isCountdownMode })
+                      .selectedColor(Theme.COLOR_PRIMARY)
+                      .width(52)
+                      .height(28)
+                      .enabled(!this.isFinishing)
+                      .onChange((isOn: boolean) => {
+                        this.isCountdownMode = isOn
+                      })
+                    Text('倒计时模式')
+                      .fontSize(Theme.FONT_SIZE_MEDIUM)
+                      .fontColor(Theme.COLOR_TEXT_SECONDARY)
+                  }
 
                 if (this.isCountdownMode) {
                   Row({ space: 8 }) {
-                    Button({ type: ButtonType.Circle }) {
-                      Text('-').fontSize(Theme.FONT_SIZE_LARGE).fontColor(Theme.COLOR_TEXT_SECONDARY)
-                    }
-                    .width(36)
-                    .height(36)
-                    .backgroundColor(Theme.COLOR_BACKGROUND)
-                    .onClick(() => {
-                      if (this.countdownMinutes > 1) {
-                        this.countdownMinutes -= 1
-                      }
-                    })
-
-                    Text(`${this.countdownMinutes}`)
-                      .fontSize(Theme.FONT_SIZE_LARGE)
-                      .fontWeight(FontWeight.Bold)
-                      .fontColor(Theme.COLOR_TEXT_PRIMARY)
-                      .width(40)
+                    TextInput({ placeholder: '分钟', text: this.countdownInput })
+                      .width(80)
+                      .height(36)
+                      .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
+                      .backgroundColor(Theme.COLOR_BACKGROUND)
+                      .border({ width: 1, color: Theme.COLOR_BORDER })
+                      .padding({ left: 8, right: 8 })
                       .textAlign(TextAlign.Center)
-
-                    Button({ type: ButtonType.Circle }) {
-                      Text('+').fontSize(Theme.FONT_SIZE_LARGE).fontColor(Theme.COLOR_TEXT_SECONDARY)
-                    }
-                    .width(36)
-                    .height(36)
-                    .backgroundColor(Theme.COLOR_BACKGROUND)
-                    .onClick(() => {
-                      this.countdownMinutes += 1
-                    })
-
+                      .fontSize(Theme.FONT_SIZE_MEDIUM)
+                      .enabled(!this.isFinishing)
+                      .onChange((value: string) => {
+                        const digits = value.replace(/[^\d]/g, '')
+                        this.countdownInput = digits
+                        const minutes = Number(digits)
+                        if (Number.isFinite(minutes) && minutes > 0) {
+                          this.countdownMinutes = minutes
+                        }
+                      })
                     Text('分钟')
                       .fontSize(Theme.FONT_SIZE_SMALL)
                       .fontColor(Theme.COLOR_TEXT_TERTIARY)
                   }
                 }
-              }
-              .width('100%')
-              .padding({ left: 16, right: 16 })
-              .justifyContent(FlexAlign.SpaceBetween)
-
-              // 启动按钮 - 更大更醒目
-              Button('开始专注')
-                .width('85%')
-                .height(60)
-                .fontSize(Theme.FONT_SIZE_LARGE)
-                .fontWeight(FontWeight.Bold)
-                .fontColor(Color.White)
-                .backgroundColor(Theme.COLOR_PRIMARY)
-                .borderRadius(Theme.BORDER_RADIUS_XLARGE)
-                .shadow(Theme.SHADOW_GLOW)
-                .onClick(() => {
-                  this.startSession()
-                })
-            }
-            .width('100%')
-            .padding({ left: 16, right: 16 })
-          } else if (this.focusState.isBreaking) {
-            Button('结束休息')
-              .width('85%')
-              .height(60)
-              .fontSize(Theme.FONT_SIZE_LARGE)
-              .fontWeight(FontWeight.Bold)
-              .fontColor(Color.White)
-              .backgroundColor(Theme.COLOR_WARNING)
-              .borderRadius(Theme.BORDER_RADIUS_XLARGE)
-              .shadow({
-                radius: 20,
-                color: '#F9731640',
-                offsetX: 0,
-                offsetY: 4
-              })
-              .onClick(() => {
-                this.onFinishBreak()
-              })
-          } else {
-            Column({ space: 18 }) {
-              Row({ space: 14 }) {
-                // 休息按钮
-                Button({ type: ButtonType.Circle }) {
-                  Text('☕').fontSize(24)
                 }
-                .width(60)
-                .height(60)
-                .backgroundColor(Theme.COLOR_WARNING_BG)
-                .onClick(() => {
-                  this.onStartBreak()
-                })
+                .width('100%')
+                .padding({ left: 12, right: 12 })
+                .justifyContent(FlexAlign.SpaceBetween)
 
-                // 暂停按钮
-                Button({ type: ButtonType.Circle }) {
-                  Text('⏸').fontSize(24)
-                }
-                .width(60)
-                .height(60)
-                .backgroundColor(Theme.COLOR_BACKGROUND)
-                .onClick(() => {
-                  if (this.isRunning()) {
-                    this.onPause()
-                  }
-                })
-
-                // 完成按钮 - 主要操作
-                Button('完成专注')
-                  .layoutWeight(1)
+                // 启动按钮 - 更大更醒目
+                Button('开始专注')
+                  .width('85%')
                   .height(60)
-                  .fontSize(Theme.FONT_SIZE_MEDIUM)
+                  .fontSize(Theme.FONT_SIZE_LARGE)
                   .fontWeight(FontWeight.Bold)
                   .fontColor(Color.White)
                   .backgroundColor(Theme.COLOR_PRIMARY)
                   .borderRadius(Theme.BORDER_RADIUS_XLARGE)
                   .shadow(Theme.SHADOW_GLOW)
+                  .enabled(!this.isFinishing)
                   .onClick(() => {
-                    this.onFinish()
+                    this.startSession()
                   })
               }
+              .width('100%')
+              .padding({ left: 12, right: 12 })
+            } else if (this.focusState.isBreaking) {
+              Column() {
+                Button('结束休息')
+                  .width('85%')
+                  .height(60)
+                  .fontSize(Theme.FONT_SIZE_LARGE)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor(Color.White)
+                  .backgroundColor(Theme.COLOR_WARNING)
+                  .borderRadius(Theme.BORDER_RADIUS_XLARGE)
+                  .shadow({
+                    radius: 20,
+                    color: '#F9731640',
+                    offsetX: 0,
+                    offsetY: 4
+                  })
+                  .enabled(!this.isFinishing)
+                  .onClick(() => {
+                    this.onFinishBreak()
+                  })
+              }
+              .width('100%')
+              .padding({ left: 12, right: 12 })
+            } else {
+              Column({ space: 9 }) {
+                Row({ space: 14 }) {
+                  if (this.restEnabled) {
+                    // 休息按钮
+                    Button({ type: ButtonType.Circle }) {
+                      Text('☕').fontSize(24)
+                    }
+                    .width(60)
+                    .height(60)
+                    .backgroundColor(Theme.COLOR_WARNING_BG)
+                    .enabled(!this.isFinishing)
+                    .onClick(() => {
+                      this.onStartBreak(false)
+                    })
+                  }
+
+                  // 暂停按钮
+                  Button({ type: ButtonType.Circle }) {
+                    Text('⏸').fontSize(24)
+                  }
+                  .width(60)
+                  .height(60)
+                  .backgroundColor(Theme.COLOR_BACKGROUND)
+                  .enabled(!this.isFinishing)
+                  .onClick(() => {
+                    if (this.isRunning()) {
+                      this.onPause()
+                    }
+                  })
+
+                  // 完成按钮 - 主要操作
+                  Button('完成专注')
+                    .layoutWeight(1)
+                    .height(60)
+                    .fontSize(Theme.FONT_SIZE_MEDIUM)
+                    .fontWeight(FontWeight.Bold)
+                    .fontColor(Color.White)
+                    .backgroundColor(Theme.COLOR_PRIMARY)
+                    .borderRadius(Theme.BORDER_RADIUS_XLARGE)
+                    .shadow(Theme.SHADOW_GLOW)
+                    .enabled(!this.isFinishing)
+                    .onClick(() => {
+                      this.onFinish()
+                    })
+                }
+                .justifyContent(FlexAlign.Center)
+              }
+              .width('100%')
+              .padding({ left: 20, right: 20 })
+              .justifyContent(FlexAlign.Center)
             }
-            .width('100%')
-            .padding({ left: 20, right: 20 })
           }
+          .width('100%')
+          .height(this.getControlAreaHeight())
+          .justifyContent(FlexAlign.Start)
+          .animation({
+            duration: Theme.ANIMATION_NORMAL,
+            curve: Curve.EaseInOut
+          })
 
           // 统计卡片
           Row() {
@@ -925,7 +1013,7 @@ struct FocusPage {
           }
           .width('100%')
           .padding({ left: 20, right: 20, top: 18, bottom: 18 })
-          .margin({ left: 16, right: 16 })
+          .margin({ left: 16, right: 16, bottom: 0 })
           .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
           .borderRadius(Theme.BORDER_RADIUS_LARGE)
           .shadow(Theme.SHADOW_SMALL)
@@ -967,15 +1055,18 @@ struct FocusPage {
           }
           .width('100%')
           .padding({ left: 18, right: 18, top: 16, bottom: 16 })
-          .margin({ left: 16, right: 16 })
+          .margin({ left: 16, right: 16, top: 0 })
           .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
           .borderRadius(Theme.BORDER_RADIUS_LARGE)
           .shadow(Theme.SHADOW_SMALL)
+            }
+          }
+          .backgroundColor(Theme.COLOR_BACKGROUND)
+          .width('100%')
+          .padding({ left: 0, right: 0, bottom: 0 })
         }
         .layoutWeight(1)
-        .backgroundColor(Theme.COLOR_BACKGROUND)
         .width('100%')
-        .padding({ left: 0, right: 0, bottom: 28 })
       }
       .width('100%')
       .height('100%')
@@ -1014,7 +1105,30 @@ struct FocusPage {
       if (this.sessionSheetVisible) {
         this.SessionDetailsDialog()
       }
+
+      if (this.isFinishing) {
+        Column() {
+          LoadingProgress()
+            .width(52)
+            .height(52)
+            .color(Theme.COLOR_TEXT_ON_PRIMARY)
+          Text('处理中...')
+            .fontSize(Theme.FONT_SIZE_MEDIUM)
+            .fontColor(Theme.COLOR_TEXT_ON_PRIMARY)
+            .margin({ top: 12 })
+        }
+        .width('100%')
+        .height('100%')
+        .backgroundColor('#555555CC')
+        .justifyContent(FlexAlign.Center)
+        .onClick(() => {})
+      }
     }
+    .onTouch((event: TouchEvent) => {
+      if (event.type === TouchType.Down) {
+        this.hideKeyboard()
+      }
+    })
     .width('100%')
     .height('100%')
   }
@@ -1072,7 +1186,7 @@ struct FocusPage {
           .borderRadius(Theme.BORDER_RADIUS_LARGE)
           .onClick(async () => {
             this.showStartRestPrompt = false
-            await this.onStartBreak()
+            await this.onStartBreak(true)
           })
       }
       }

@@ -2,6 +2,7 @@
  * Task creation / edit page - 精致现代风格
  */
 import router from '@ohos.router'
+import inputMethod from '@ohos.inputMethod'
 import promptAction from '@ohos.promptAction'
 import { TaskStore } from '../store/taskStore'
 import { FocusStore } from '../store/focusStore'
@@ -25,6 +26,14 @@ struct StartPage {
   @State showSuccessAnimation: boolean = false
   @State headerOpacity: number = 0
   @State contentOpacity: number = 0
+
+  private hideKeyboard() {
+    try {
+      inputMethod.getController().hideTextInput()
+    } catch (e) {
+      // Ignore when keyboard is not available.
+    }
+  }
 
   async aboutToAppear() {
     TaskStore.init(getContext(this))
@@ -248,6 +257,11 @@ struct StartPage {
         message: `任务 "${this.taskTitle}" 已创建`
       })
     }
+    .onTouch((event: TouchEvent) => {
+      if (event.type === TouchType.Down) {
+        this.hideKeyboard()
+      }
+    })
     .width('100%')
     .height('100%')
   }
