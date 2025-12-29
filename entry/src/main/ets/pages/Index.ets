@@ -8,11 +8,23 @@ import { FocusStore } from '../store/focusStore'
 import { Task } from '../model/Task'
 import { FocusSession } from '../model/FocusSession'
 import { BottomNav } from '../components/BottomNav'
+import { OnboardingOverlay } from '../components/OnboardingOverlay'
 import { Theme } from '../common/theme'
 import { Logger } from '../common/logger'
 import { SettingsService } from '../services/SettingsService'
 import { NotificationService } from '../services/NotificationService'
 import common from '@ohos.app.ability.common'
+import {
+  DEMO_TASK_DESCRIPTION,
+  DEMO_TASK_TITLE,
+  getFirstOnboardingStepId,
+  getOnboardingStep,
+  getOnboardingTarget,
+  OnboardingRect,
+  OnboardingTargets,
+  shouldShowOnboarding,
+  updateOnboardingTargets
+} from '../onboarding/OnboardingFlow'
 
 @Entry
 @Component
@@ -22,6 +34,15 @@ struct Index {
   @StorageLink('focusIsBreaking') storageIsBreaking: boolean = false
   @StorageLink('breakEndPromptPending') pendingBreakEndPrompt: boolean = false
   @StorageLink('startRestPromptPending') pendingStartRestPrompt: boolean = false
+  @StorageLink('onboardingHistoryRectX') onboardingHistoryRectX: number = 0
+  @StorageLink('onboardingHistoryRectY') onboardingHistoryRectY: number = 0
+  @StorageLink('onboardingHistoryRectW') onboardingHistoryRectW: number = 0
+  @StorageLink('onboardingHistoryRectH') onboardingHistoryRectH: number = 0
+  @StorageLink('onboardingAdvanceTick') onboardingAdvanceTick: number = 0
+  @StorageLink('onboardingSkipTick') onboardingSkipTick: number = 0
+  @State lastAdvanceTick: number = 0
+  @State lastSkipTick: number = 0
+  private onboardingTickTimer: number = -1
   @State showRecoverDialog: boolean = false
   @State recoveredSession: FocusSession | null = null
   @State recoveredTaskTitle: string = ''
@@ -34,6 +55,10 @@ struct Index {
   // 滑动手势相关
   @State panOffsetX: number = 0
   private readonly swipeThreshold: number = 80
+  @StorageLink('hasSeenOnboarding') hasSeenOnboarding: boolean = false
+  @StorageLink('onboardingStepId') onboardingStepId: string = ''
+  @StorageLink('onboardingDemoTaskId') onboardingDemoTaskId: number = -1
+  @State onboardingTargets: OnboardingTargets = new OnboardingTargets()
 
   async aboutToAppear() {
     TaskStore.init(getContext(this))
@@ -43,6 +68,8 @@ struct Index {
 
     await TaskStore.loadTasks()
     this.taskState = TaskStore.getState()
+    await this.ensureOnboardingSetup()
+    this.startOnboardingTickMonitor()
 
     const recoverResult = await FocusStore.checkAndRecoverSession()
     if (recoverResult.ok && recoverResult.data !== null && recoverResult.data !== undefined) {
@@ -71,6 +98,10 @@ struct Index {
     this.routeToStartRestIfNeeded()
   }
 
+  aboutToDisappear() {
+    this.stopOnboardingTickMonitor()
+  }
+
   private async ensureNotificationPermission() {
     const enabled = await NotificationService.isEnabled()
     if (!enabled) {
@@ -92,6 +123,191 @@ struct Index {
         router.replaceUrl({ url: 'pages/SettingsPage' })
       }
     }
+  }
+
+  private startOnboardingTickMonitor() {
+    if (this.onboardingTickTimer !== -1) {
+      return
+    }
+    this.lastAdvanceTick = this.onboardingAdvanceTick
+    this.lastSkipTick = this.onboardingSkipTick
+    this.onboardingTickTimer = setInterval(() => {
+      if (!this.shouldShowOnboardingForRoute('HOME')) {
+        this.lastAdvanceTick = this.onboardingAdvanceTick
+        this.lastSkipTick = this.onboardingSkipTick
+        return
+      }
+      if (this.onboardingAdvanceTick !== this.lastAdvanceTick) {
+        this.lastAdvanceTick = this.onboardingAdvanceTick
+        this.handleOnboardingAdvance()
+      }
+      if (this.onboardingSkipTick !== this.lastSkipTick) {
+        this.lastSkipTick = this.onboardingSkipTick
+        this.endOnboarding()
+      }
+    }, 150)
+  }
+
+  private stopOnboardingTickMonitor() {
+    if (this.onboardingTickTimer === -1) {
+      return
+    }
+    clearInterval(this.onboardingTickTimer)
+    this.onboardingTickTimer = -1
+  }
+
+  private parseLength(value: Length | undefined): number {
+    if (value === undefined) {
+      return 0
+    }
+    if (typeof value === 'number') {
+      return value
+    }
+    if (typeof value === 'string') {
+      const parsed = Number.parseFloat(value)
+      return Number.isNaN(parsed) ? 0 : parsed
+    }
+    return 0
+  }
+
+  private areaToRect(newArea: Area): OnboardingRect {
+    return {
+      x: this.parseLength(newArea.position?.x),
+      y: this.parseLength(newArea.position?.y),
+      width: this.parseLength(newArea.width),
+      height: this.parseLength(newArea.height)
+    }
+  }
+
+  private updateOnboardingTarget(targetId: string, newArea: Area) {
+    const rect = this.areaToRect(newArea)
+    this.updateOnboardingRect(targetId, rect)
+  }
+
+  private updateOnboardingRect(targetId: string, rect: OnboardingRect) {
+    this.onboardingTargets = updateOnboardingTargets(this.onboardingTargets, targetId, rect)
+  }
+
+  private getCurrentOnboardingStep() {
+    return getOnboardingStep(this.onboardingStepId)
+  }
+
+  private getCurrentOnboardingTarget(): OnboardingRect | undefined {
+    const step = this.getCurrentOnboardingStep()
+    if (!step?.targetId) {
+      return undefined
+    }
+    if (step.targetId === 'home_history_icon') {
+      return {
+        x: this.onboardingHistoryRectX,
+        y: this.onboardingHistoryRectY,
+        width: this.onboardingHistoryRectW,
+        height: this.onboardingHistoryRectH
+      }
+    }
+    return getOnboardingTarget(this.onboardingTargets, step.targetId)
+  }
+
+  private shouldShowOnboardingForRoute(route: string): boolean {
+    const step = this.getCurrentOnboardingStep()
+    if (!step) {
+      return false
+    }
+    if (step.isSetup) {
+      return false
+    }
+    if (!shouldShowOnboarding(this.hasSeenOnboarding)) {
+      return false
+    }
+    return step.route === route
+  }
+
+  private handleOnboardingAdvance() {
+    const step = this.getCurrentOnboardingStep()
+    if (!step) {
+      return
+    }
+    switch (step.id) {
+      case 's1_home_list_intro':
+        this.onboardingStepId = 's2_select_demo_task'
+        return
+      case 's2_select_demo_task': {
+        const demoId = this.getDemoTaskId()
+        if (demoId <= 0) {
+          return
+        }
+        router.pushUrl({ url: 'pages/FocusPage', params: { pendingTaskId: demoId } })
+        this.onboardingStepId = 's3_start_focus'
+        return
+      }
+      case 's8_history_entry':
+        router.pushUrl({ url: 'pages/HistoryPage' })
+        this.onboardingStepId = 'end_history_page'
+        return
+      default:
+        return
+    }
+  }
+
+  private endOnboarding() {
+    this.hasSeenOnboarding = true
+    this.onboardingStepId = ''
+  }
+
+  private async ensureOnboardingSetup() {
+    if (!shouldShowOnboarding(this.hasSeenOnboarding)) {
+      return
+    }
+    if (this.onboardingStepId === '') {
+      this.onboardingStepId = getFirstOnboardingStepId()
+    }
+    if (this.onboardingStepId !== 'setup_demo_task') {
+      return
+    }
+    const demoId = await this.ensureDemoTask()
+    if (demoId !== null) {
+      this.onboardingDemoTaskId = demoId
+      this.taskState = TaskStore.getState()
+      this.onboardingStepId = 's1_home_list_intro'
+    }
+  }
+
+  private getDemoTaskId(): number {
+    if (this.onboardingDemoTaskId > 0) {
+      return this.onboardingDemoTaskId
+    }
+    const existing = this.findDemoTaskByTitle()
+    if (existing) {
+      this.onboardingDemoTaskId = existing.id
+      return existing.id
+    }
+    return -1
+  }
+
+  private findDemoTaskByTitle(): Task | undefined {
+    const tasks = TaskStore.getState().tasks
+    return tasks.find((task) => task.title === DEMO_TASK_TITLE && task.description === DEMO_TASK_DESCRIPTION)
+  }
+
+  private async ensureDemoTask(): Promise<number | null> {
+    if (this.onboardingDemoTaskId > 0) {
+      const existing = TaskStore.findTask(this.onboardingDemoTaskId)
+      if (existing) {
+        return existing.id
+      }
+    }
+    const existingByTitle = this.findDemoTaskByTitle()
+    if (existingByTitle) {
+      return existingByTitle.id
+    }
+    const result = await TaskStore.createTask({
+      title: DEMO_TASK_TITLE,
+      description: DEMO_TASK_DESCRIPTION
+    })
+    if (result.ok && result.data !== undefined) {
+      return result.data
+    }
+    return null
   }
 
   build() {
@@ -280,6 +496,11 @@ struct Index {
                     .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
                     .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
                     .shadow(Theme.SHADOW_SMALL)
+                    .onAreaChange((_, newArea) => {
+                      if (task.id === this.onboardingDemoTaskId) {
+                        this.updateOnboardingTarget('home_demo_task_row', newArea)
+                      }
+                    })
                     .onClick(() => {
                       if (this.isEditMode) {
                         return
@@ -307,6 +528,9 @@ struct Index {
           }
           .width('100%')
           .height('100%')
+          .onAreaChange((_, newArea) => {
+            this.updateOnboardingTarget('home_list_area', newArea)
+          })
           .position({ x: 0, y: 0 })
       Column({ space: 12 }) {
         // 编辑模式按钮
@@ -364,6 +588,16 @@ struct Index {
 
       if (this.showNotificationPermissionDialog) {
         this.NotificationPermissionDialog()
+      }
+
+      if (this.shouldShowOnboardingForRoute('HOME')) {
+        OnboardingOverlay({
+          visible: true,
+          body: this.getCurrentOnboardingStep()?.body ?? '',
+          rule: this.getCurrentOnboardingStep()?.rule ?? 'TAP_ANYWHERE_EXCEPT_SKIP',
+          target: this.getCurrentOnboardingTarget(),
+          showSkip: true
+        })
       }
     }
     .width('100%')

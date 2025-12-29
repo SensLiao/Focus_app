@@ -4,6 +4,7 @@
 
 import router from '@ohos.router'
 import { Theme } from '../common/theme'
+import { OnboardingRect } from '../onboarding/OnboardingFlow'
 
 export interface BottomNavProps {
   currentIndex: number  // 0: Home, 1: History, 2: Settings
@@ -12,6 +13,10 @@ export interface BottomNavProps {
 @Component
 export struct BottomNav {
   @Prop currentIndex: number = 0
+  @StorageLink('onboardingHistoryRectX') onboardingHistoryRectX: number = 0
+  @StorageLink('onboardingHistoryRectY') onboardingHistoryRectY: number = 0
+  @StorageLink('onboardingHistoryRectW') onboardingHistoryRectW: number = 0
+  @StorageLink('onboardingHistoryRectH') onboardingHistoryRectH: number = 0
 
   build() {
     Row() {
@@ -37,6 +42,13 @@ export struct BottomNav {
       .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Center)
       .padding({ top: 8, bottom: 8 })
+      .onAreaChange((_, newArea) => {
+        const rect = this.areaToRect(newArea)
+        this.onboardingHistoryRectX = rect.x
+        this.onboardingHistoryRectY = rect.y
+        this.onboardingHistoryRectW = rect.width
+        this.onboardingHistoryRectH = rect.height
+      })
       .onClick(() => {
         if (this.currentIndex !== 1) {
           router.replaceUrl({ url: 'pages/HistoryPage' })
@@ -114,5 +126,28 @@ export struct BottomNav {
       offsetX: 0,
       offsetY: -2
     })
+  }
+
+  private parseLength(value: Length | undefined): number {
+    if (value === undefined) {
+      return 0
+    }
+    if (typeof value === 'number') {
+      return value
+    }
+    if (typeof value === 'string') {
+      const parsed = Number.parseFloat(value)
+      return Number.isNaN(parsed) ? 0 : parsed
+    }
+    return 0
+  }
+
+  private areaToRect(newArea: Area): OnboardingRect {
+    return {
+      x: this.parseLength(newArea.position?.x),
+      y: this.parseLength(newArea.position?.y),
+      width: this.parseLength(newArea.width),
+      height: this.parseLength(newArea.height)
+    }
   }
 }

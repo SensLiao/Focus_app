@@ -16,6 +16,15 @@ import { AppLifecycleService } from '../services/AppLifecycleService'
 import { NotificationService } from '../services/NotificationService'
 import { Theme } from '../common/theme'
 import { SuccessAnimation } from '../components/SuccessAnimation'
+import { OnboardingOverlay } from '../components/OnboardingOverlay'
+import {
+  getOnboardingStep,
+  getOnboardingTarget,
+  OnboardingRect,
+  OnboardingTargets,
+  shouldShowOnboarding,
+  updateOnboardingTargets
+} from '../onboarding/OnboardingFlow'
 
 interface SessionSummary {
   id: number
@@ -74,10 +83,18 @@ struct FocusPage {
   @State timerScale: number = 1
   @State headerOpacity: number = 0
   @State contentOpacity: number = 0
+  @StorageLink('hasSeenOnboarding') hasSeenOnboarding: boolean = false
+  @StorageLink('onboardingStepId') onboardingStepId: string = ''
+  @StorageLink('onboardingAdvanceTick') onboardingAdvanceTick: number = 0
+  @StorageLink('onboardingSkipTick') onboardingSkipTick: number = 0
+  @State onboardingTargets: OnboardingTargets = new OnboardingTargets()
+  @State lastAdvanceTick: number = 0
+  @State lastSkipTick: number = 0
   private timerInterval: number = -1
   private restPromptTimeoutId: number = -1
   private lifecycleListener: ((event: 'foreground' | 'background' | 'destroy') => void) | null = null
   private modeTransitionTimer: number = -1
+  private onboardingTickTimer: number = -1
 
   async aboutToAppear() {
     TaskStore.init(getContext(this))
@@ -163,6 +180,7 @@ struct FocusPage {
       }
     }
     AppLifecycleService.register(this.lifecycleListener)
+    this.startOnboardingTickMonitor()
 
   }
 
@@ -193,6 +211,141 @@ struct FocusPage {
       clearTimeout(this.restPromptTimeoutId)
       this.restPromptTimeoutId = -1
     }
+    this.stopOnboardingTickMonitor()
+  }
+
+  private startOnboardingTickMonitor() {
+    if (this.onboardingTickTimer !== -1) {
+      return
+    }
+    this.lastAdvanceTick = this.onboardingAdvanceTick
+    this.lastSkipTick = this.onboardingSkipTick
+    this.onboardingTickTimer = setInterval(() => {
+      if (!(this.shouldShowOnboardingForRoute('TIMER') || this.shouldShowOnboardingForRoute('REST_MODE'))) {
+        this.lastAdvanceTick = this.onboardingAdvanceTick
+        this.lastSkipTick = this.onboardingSkipTick
+        return
+      }
+      if (this.onboardingAdvanceTick !== this.lastAdvanceTick) {
+        this.lastAdvanceTick = this.onboardingAdvanceTick
+        this.handleOnboardingAdvance()
+      }
+      if (this.onboardingSkipTick !== this.lastSkipTick) {
+        this.lastSkipTick = this.onboardingSkipTick
+        this.endOnboarding()
+      }
+    }, 150)
+  }
+
+  private stopOnboardingTickMonitor() {
+    if (this.onboardingTickTimer === -1) {
+      return
+    }
+    clearInterval(this.onboardingTickTimer)
+    this.onboardingTickTimer = -1
+  }
+
+  private parseLength(value: Length | undefined): number {
+    if (value === undefined) {
+      return 0
+    }
+    if (typeof value === 'number') {
+      return value
+    }
+    if (typeof value === 'string') {
+      const parsed = Number.parseFloat(value)
+      return Number.isNaN(parsed) ? 0 : parsed
+    }
+    return 0
+  }
+
+  private areaToRect(newArea: Area): OnboardingRect {
+    return {
+      x: this.parseLength(newArea.position?.x),
+      y: this.parseLength(newArea.position?.y),
+      width: this.parseLength(newArea.width),
+      height: this.parseLength(newArea.height)
+    }
+  }
+
+  private updateOnboardingTarget(targetId: string, newArea: Area) {
+    const rect = this.areaToRect(newArea)
+    this.onboardingTargets = updateOnboardingTargets(this.onboardingTargets, targetId, rect)
+  }
+
+  private getCurrentOnboardingStep() {
+    return getOnboardingStep(this.onboardingStepId)
+  }
+
+  private getCurrentOnboardingTarget(): OnboardingRect | undefined {
+    const step = this.getCurrentOnboardingStep()
+    if (!step?.targetId) {
+      return undefined
+    }
+    return getOnboardingTarget(this.onboardingTargets, step.targetId)
+  }
+
+  private shouldShowOnboardingForRoute(route: string): boolean {
+    const step = this.getCurrentOnboardingStep()
+    if (!step || !shouldShowOnboarding(this.hasSeenOnboarding)) {
+      return false
+    }
+    if (step.isSetup) {
+      return false
+    }
+    if (step.route !== route) {
+      return false
+    }
+    if (route === 'REST_MODE') {
+      return this.focusState.isBreaking
+    }
+    if (route === 'TIMER') {
+      return !this.focusState.isBreaking
+    }
+    return false
+  }
+
+  private handleOnboardingAdvance() {
+    const step = this.getCurrentOnboardingStep()
+    if (!step) {
+      return
+    }
+    switch (step.id) {
+      case 's3_start_focus':
+        void this.startSession()
+        this.onboardingStepId = 's4_timer_display'
+        return
+      case 's4_timer_display':
+        this.onboardingStepId = 's5a_rest_button'
+        return
+      case 's5a_rest_button':
+        void this.onStartBreak(false)
+        this.onboardingStepId = 's5b_end_rest'
+        return
+      case 's5b_end_rest':
+        void this.onFinishBreak()
+        this.onboardingStepId = 's6a_pause'
+        return
+      case 's6a_pause':
+        void this.performPause()
+        this.onboardingStepId = 's6b_resume_focus'
+        return
+      case 's6b_resume_focus':
+        void this.startSession()
+        this.onboardingStepId = 's7_complete_task'
+        return
+      case 's7_complete_task':
+        void this.onFinish()
+        this.onboardingStepId = 's8_history_entry'
+        return
+      default:
+        return
+    }
+  }
+
+  private endOnboarding() {
+    this.hasSeenOnboarding = true
+    this.onboardingStepId = ''
   }
 
   private startTimer() {
@@ -818,8 +971,11 @@ struct FocusPage {
                     .opacity(this.getSecondaryTimerLabel() === '' ? 0 : 1)
                 }
               }
-            }
-            .margin({ top: 0 })
+              }
+              .onAreaChange((_, newArea) => {
+                this.updateOnboardingTarget('timer_display_area', newArea)
+              })
+              .margin({ top: 0 })
           }
           .width('100%')
           .justifyContent(FlexAlign.Center)
@@ -890,6 +1046,9 @@ struct FocusPage {
                   .borderRadius(Theme.BORDER_RADIUS_XLARGE)
                   .shadow(Theme.SHADOW_GLOW)
                   .enabled(!this.isFinishing)
+                  .onAreaChange((_, newArea) => {
+                    this.updateOnboardingTarget('timer_start_focus_button', newArea)
+                  })
                   .onClick(() => {
                     this.startSession()
                   })
@@ -913,6 +1072,9 @@ struct FocusPage {
                     offsetY: 4
                   })
                   .enabled(!this.isFinishing)
+                  .onAreaChange((_, newArea) => {
+                    this.updateOnboardingTarget('timer_end_rest_button', newArea)
+                  })
                   .onClick(() => {
                     this.onFinishBreak()
                   })
@@ -931,6 +1093,9 @@ struct FocusPage {
                     .height(60)
                     .backgroundColor(Theme.COLOR_WARNING_BG)
                     .enabled(!this.isFinishing)
+                    .onAreaChange((_, newArea) => {
+                      this.updateOnboardingTarget('timer_rest_button', newArea)
+                    })
                     .onClick(() => {
                       this.onStartBreak(false)
                     })
@@ -944,6 +1109,9 @@ struct FocusPage {
                   .height(60)
                   .backgroundColor(Theme.COLOR_BACKGROUND)
                   .enabled(!this.isFinishing)
+                  .onAreaChange((_, newArea) => {
+                    this.updateOnboardingTarget('timer_pause_button', newArea)
+                  })
                   .onClick(() => {
                     if (this.isRunning()) {
                       this.onPause()
@@ -961,6 +1129,9 @@ struct FocusPage {
                     .borderRadius(Theme.BORDER_RADIUS_XLARGE)
                     .shadow(Theme.SHADOW_GLOW)
                     .enabled(!this.isFinishing)
+                    .onAreaChange((_, newArea) => {
+                      this.updateOnboardingTarget('timer_complete_button', newArea)
+                    })
                     .onClick(() => {
                       this.onFinish()
                     })
@@ -1104,6 +1275,16 @@ struct FocusPage {
 
       if (this.sessionSheetVisible) {
         this.SessionDetailsDialog()
+      }
+
+      if (this.shouldShowOnboardingForRoute('TIMER') || this.shouldShowOnboardingForRoute('REST_MODE')) {
+        OnboardingOverlay({
+          visible: true,
+          body: this.getCurrentOnboardingStep()?.body ?? '',
+          rule: this.getCurrentOnboardingStep()?.rule ?? 'TAP_ANYWHERE_EXCEPT_SKIP',
+          target: this.getCurrentOnboardingTarget(),
+          showSkip: true
+        })
       }
 
       if (this.isFinishing) {
