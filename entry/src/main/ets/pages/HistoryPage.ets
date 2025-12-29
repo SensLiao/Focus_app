@@ -14,7 +14,9 @@ import { FocusSegment } from '../model/FocusSegment'
 import { BreakEvent } from '../model/BreakEvent'
 import { SessionStatus } from '../model/SessionStatus'
 import { BottomNav } from '../components/BottomNav'
+import { OnboardingOverlay } from '../components/OnboardingOverlay'
 import { Theme } from '../common/theme'
+import { getOnboardingStep, shouldShowOnboarding } from '../onboarding/OnboardingFlow'
 
 class FocusSessionCopy implements FocusSession {
   id: number
@@ -84,6 +86,13 @@ struct HistoryPage {
   // 滑动手势相关
   @State panOffsetX: number = 0
   private readonly swipeThreshold: number = 80
+  @StorageLink('hasSeenOnboarding') hasSeenOnboarding: boolean = false
+  @StorageLink('onboardingStepId') onboardingStepId: string = ''
+  @StorageLink('onboardingAdvanceTick') onboardingAdvanceTick: number = 0
+  @StorageLink('onboardingSkipTick') onboardingSkipTick: number = 0
+  @State lastAdvanceTick: number = 0
+  @State lastSkipTick: number = 0
+  private onboardingTickTimer: number = -1
 
   private hideKeyboard() {
     try {
@@ -102,10 +111,15 @@ struct HistoryPage {
     setTimeout(() => {
       this.contentOpacity = 1
     }, 200)
+    this.startOnboardingTickMonitor()
   }
 
   onPageShow() {
     this.loadData()
+  }
+
+  aboutToDisappear() {
+    this.stopOnboardingTickMonitor()
   }
 
   private handleSwipeGesture(offsetX: number, velocity: number) {
@@ -124,8 +138,73 @@ struct HistoryPage {
     }
   }
 
+  private startOnboardingTickMonitor() {
+    if (this.onboardingTickTimer !== -1) {
+      return
+    }
+    this.lastAdvanceTick = this.onboardingAdvanceTick
+    this.lastSkipTick = this.onboardingSkipTick
+    this.onboardingTickTimer = setInterval(() => {
+      if (!this.shouldShowOnboardingForRoute('HISTORY')) {
+        this.lastAdvanceTick = this.onboardingAdvanceTick
+        this.lastSkipTick = this.onboardingSkipTick
+        return
+      }
+      if (this.onboardingAdvanceTick !== this.lastAdvanceTick) {
+        this.lastAdvanceTick = this.onboardingAdvanceTick
+        this.handleOnboardingAdvance()
+      }
+      if (this.onboardingSkipTick !== this.lastSkipTick) {
+        this.lastSkipTick = this.onboardingSkipTick
+        this.endOnboarding()
+      }
+    }, 150)
+  }
+
+  private stopOnboardingTickMonitor() {
+    if (this.onboardingTickTimer === -1) {
+      return
+    }
+    clearInterval(this.onboardingTickTimer)
+    this.onboardingTickTimer = -1
+  }
+
+  private getCurrentOnboardingStep() {
+    return getOnboardingStep(this.onboardingStepId)
+  }
+
+  private shouldShowOnboardingForRoute(route: string): boolean {
+    const step = this.getCurrentOnboardingStep()
+    if (!step) {
+      return false
+    }
+    if (step.isSetup) {
+      return false
+    }
+    if (!shouldShowOnboarding(this.hasSeenOnboarding)) {
+      return false
+    }
+    return step.route === route
+  }
+
+  private handleOnboardingAdvance() {
+    const step = this.getCurrentOnboardingStep()
+    if (!step) {
+      return
+    }
+    if (step.id === 'end_history_page') {
+      this.endOnboarding()
+    }
+  }
+
+  private endOnboarding() {
+    this.hasSeenOnboarding = true
+    this.onboardingStepId = ''
+  }
+
   build() {
-    Column() {
+    Stack() {
+      Column() {
       // 顶部标题栏 - 精致现代风格
       Row() {
         Row({ space: 10 }) {
@@ -199,26 +278,38 @@ struct HistoryPage {
         curve: Curve.EaseOut
       })
 
-      BottomNav({ currentIndex: 1 })
+        BottomNav({ currentIndex: 1 })
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(Theme.COLOR_BACKGROUND)
+      .onTouch((event: TouchEvent) => {
+        if (event.type === TouchType.Down) {
+          this.hideKeyboard()
+        }
+      })
+      .gesture(
+        PanGesture({ direction: PanDirection.Horizontal })
+          .onActionUpdate((event: GestureEvent) => {
+            this.panOffsetX = event.offsetX
+          })
+          .onActionEnd((event: GestureEvent) => {
+            this.handleSwipeGesture(event.offsetX, event.velocityX)
+            this.panOffsetX = 0
+          })
+      )
+
+      if (this.shouldShowOnboardingForRoute('HISTORY')) {
+        OnboardingOverlay({
+          visible: true,
+          body: this.getCurrentOnboardingStep()?.body ?? '',
+          rule: this.getCurrentOnboardingStep()?.rule ?? 'TAP_ANYWHERE_EXCEPT_SKIP',
+          showSkip: true
+        })
+      }
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Theme.COLOR_BACKGROUND)
-    .onTouch((event: TouchEvent) => {
-      if (event.type === TouchType.Down) {
-        this.hideKeyboard()
-      }
-    })
-    .gesture(
-      PanGesture({ direction: PanDirection.Horizontal })
-        .onActionUpdate((event: GestureEvent) => {
-          this.panOffsetX = event.offsetX
-        })
-        .onActionEnd((event: GestureEvent) => {
-          this.handleSwipeGesture(event.offsetX, event.velocityX)
-          this.panOffsetX = 0
-        })
-    )
   }
 
   @Builder
