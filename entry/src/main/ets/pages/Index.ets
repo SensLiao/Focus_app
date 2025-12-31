@@ -53,7 +53,7 @@ struct Index {
   @State deleteTarget: Task | null = null
   @State showNotificationPermissionDialog: boolean = false
   @StorageLink('pendingNotificationPermission') pendingNotificationPermission: boolean = false
-  // 动画相关状态
+  // 动画相关状�?
   @State headerOpacity: number = 0
   @State listItemsLoaded: boolean = false
   // 滑动手势相关
@@ -129,10 +129,10 @@ struct Index {
     // 快速滑动或滑动距离足够
     if (absVelocity > 500 || absOffset > this.swipeThreshold) {
       if (offsetX > 0) {
-        // 向右滑动 - 切换到历史页面
+        // 向右滑动 - 切换到历史页�?
         router.replaceUrl({ url: 'pages/HistoryPage' })
       } else if (offsetX < 0) {
-        // 向左滑动 - 切换到设置页面
+        // 向左滑动 - 切换到设置页�?
         router.replaceUrl({ url: 'pages/SettingsPage' })
       }
     }
@@ -373,7 +373,7 @@ struct Index {
   build() {
     Stack({ alignContent: Alignment.BottomEnd }) {
       Column() {
-        // 顶部标题栏 - 更大字体和优雅渐变
+        // 顶部标题�?- 更大字体和优雅渐�?
         Column() {
           Row() {
             Text('待办任务')
@@ -437,7 +437,7 @@ struct Index {
                   .fontWeight(FontWeight.Bold)
                   .fontColor(Theme.COLOR_TEXT_PRIMARY)
 
-                Text('添加你的第一个任务\n开始专注之旅吧！')
+                Text('添加你的第一个任务\n开始专注之旅吧?')
                   .fontSize(Theme.FONT_SIZE_MEDIUM)
                   .fontColor(Theme.COLOR_TEXT_SECONDARY)
                   .textAlign(TextAlign.Center)
@@ -534,13 +534,20 @@ struct Index {
                       } else {
                         // ???? - ??????
                         Button({ type: ButtonType.Circle }) {
-                          Text('☕')
-                            .fontSize(24)
+                          if (this.isRestingTask(task)) {
+                            Text('\u2615')
+                              .fontSize(22)
+                              .fontColor(Color.White)
+                          } else {
+                            Image($r('app.media.start_button'))
+                              .width(28)
+                              .height(28)
+                          }
                         }
                         .width(52)
                         .height(52)
-                        .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-                        .border({ width: 1, color: Theme.COLOR_BORDER })
+                        .backgroundColor(this.isRestingTask(task) ? Theme.COLOR_WARNING : Theme.COLOR_CARD_BACKGROUND)
+                        .border({ width: this.isRestingTask(task) ? 0 : 1, color: Theme.COLOR_BORDER })
                         .shadow(Theme.SHADOW_SMALL)
                         .onClick(() => {
                           if (this.isActiveTask(task)) {
@@ -604,7 +611,7 @@ struct Index {
         // 编辑模式按钮
         Button({ type: ButtonType.Circle }) {
           if (this.isEditMode) {
-            Text('✕')
+            Text('�?')
               .fontSize(34)
               .fontColor(Theme.COLOR_TEXT_PRIMARY)
           } else {
@@ -685,10 +692,10 @@ struct Index {
   private getGreeting(): string {
     const hour = new Date().getHours()
     if (hour < 6) return '夜深了，注意休息 🌙'
-    if (hour < 12) return '早上好，开始新的一天 ☀️'
-    if (hour < 14) return '中午好，别忘了休息 🌤️'
+    if (hour < 12) return '早上好，开始新的一�?☀�?'
+    if (hour < 14) return '中午好，别忘了休�?🌤�?'
     if (hour < 18) return '下午好，保持专注 💪'
-    return '晚上好，今天辛苦了 🌟'
+    return '晚上好，今天辛苦�?🌟'
   }
 
   @Builder
@@ -703,7 +710,7 @@ struct Index {
       Column({ space: Theme.SPACE_LARGE }) {
         // 图标
         Column() {
-          Text('⏰')
+          Text('�?')
             .fontSize(48)
         }
         .width(80)
@@ -726,7 +733,7 @@ struct Index {
               .fontColor(Theme.COLOR_TEXT_SECONDARY)
           }
 
-          Text('上次专注已暂停，是否继续？')
+          Text('上次专注已暂停，是否继续�?')
             .fontSize(Theme.FONT_SIZE_SMALL)
             .fontColor(Theme.COLOR_TEXT_TERTIARY)
             .margin({ top: Theme.SPACE_SMALL })
@@ -805,7 +812,7 @@ struct Index {
           .fontWeight(FontWeight.Bold)
           .fontColor(Theme.COLOR_TEXT_PRIMARY)
 
-        Text('应用需要通知权限来提醒你休息时间到了，\n帮助你更好地管理专注与休息。')
+        Text('应用需要通知权限来提醒你休息时间到了，\n帮助你更好地管理专注与休息�?')
           .fontSize(Theme.FONT_SIZE_SMALL)
           .fontColor(Theme.COLOR_TEXT_SECONDARY)
           .textAlign(TextAlign.Center)
@@ -825,7 +832,7 @@ struct Index {
               context.terminateSelf()
             })
 
-          Button('去设置')
+          Button('去设�?')
             .fontSize(Theme.FONT_SIZE_MEDIUM)
             .height(52)
             .layoutWeight(1)
@@ -1049,3 +1056,4 @@ struct Index {
     }
   }
 }
+
