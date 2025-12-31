@@ -16,6 +16,7 @@ export class OnboardingTargets {
   home_list_area?: OnboardingRect
   home_demo_task_row?: OnboardingRect
   home_history_icon?: OnboardingRect
+  history_list_area?: OnboardingRect
   timer_start_focus_button?: OnboardingRect
   timer_display_area?: OnboardingRect
   timer_rest_button?: OnboardingRect
@@ -117,12 +118,16 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'end_history_page',
     route: 'HISTORY',
+    targetId: 'history_list_area',
     body: '这里就是你的历史任务列表。教程结束啦！',
     rule: 'TAP_ANYWHERE_EXCEPT_SKIP'
   }
 ]
 
-export function shouldShowOnboarding(hasSeen: boolean): boolean {
+export function shouldShowOnboarding(hasSeen: boolean, disabled: boolean): boolean {
+  if (disabled) {
+    return false
+  }
   return DEBUG_ALWAYS_SHOW_ONBOARDING || !hasSeen
 }
 
@@ -142,6 +147,8 @@ export function getOnboardingTarget(targets: OnboardingTargets, targetId: string
       return targets.home_demo_task_row
     case 'home_history_icon':
       return targets.home_history_icon
+    case 'history_list_area':
+      return targets.history_list_area
     case 'timer_start_focus_button':
       return targets.timer_start_focus_button
     case 'timer_display_area':
@@ -184,6 +191,9 @@ export function updateOnboardingTargets(
       break
     case 'home_history_icon':
       next.home_history_icon = rect
+      break
+    case 'history_list_area':
+      next.history_list_area = rect
       break
     case 'timer_start_focus_button':
       next.timer_start_focus_button = rect

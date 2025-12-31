@@ -40,6 +40,7 @@ struct Index {
   @StorageLink('onboardingHistoryRectH') onboardingHistoryRectH: number = 0
   @StorageLink('onboardingAdvanceTick') onboardingAdvanceTick: number = 0
   @StorageLink('onboardingSkipTick') onboardingSkipTick: number = 0
+  @StorageLink('onboardingSkipped') onboardingSkipped: boolean = false
   @State lastAdvanceTick: number = 0
   @State lastSkipTick: number = 0
   private onboardingTickTimer: number = -1
@@ -56,6 +57,7 @@ struct Index {
   @State panOffsetX: number = 0
   private readonly swipeThreshold: number = 80
   @StorageLink('hasSeenOnboarding') hasSeenOnboarding: boolean = false
+  @StorageLink('onboardingDisabled') onboardingDisabled: boolean = false
   @StorageLink('onboardingStepId') onboardingStepId: string = ''
   @StorageLink('onboardingDemoTaskId') onboardingDemoTaskId: number = -1
   @State onboardingTargets: OnboardingTargets = new OnboardingTargets()
@@ -110,6 +112,9 @@ struct Index {
   }
 
   private handleSwipeGesture(offsetX: number, velocity: number) {
+    if (this.isOnboardingActive()) {
+      return
+    }
     const absOffset = Math.abs(offsetX)
     const absVelocity = Math.abs(velocity)
     
@@ -143,7 +148,7 @@ struct Index {
       }
       if (this.onboardingSkipTick !== this.lastSkipTick) {
         this.lastSkipTick = this.onboardingSkipTick
-        this.endOnboarding()
+        void this.handleOnboardingSkip()
       }
     }, 150)
   }
@@ -154,6 +159,29 @@ struct Index {
     }
     clearInterval(this.onboardingTickTimer)
     this.onboardingTickTimer = -1
+  }
+
+  private async handleOnboardingSkip() {
+    this.onboardingSkipped = true
+    this.endOnboarding()
+    await this.cleanupDemoTask()
+    router.replaceUrl({ url: 'pages/Index' })
+  }
+
+  private async cleanupDemoTask() {
+    let demoId = this.onboardingDemoTaskId
+    if (demoId <= 0) {
+      const existing = this.findDemoTaskByTitle()
+      if (existing) {
+        demoId = existing.id
+      }
+    }
+    if (demoId > 0) {
+      await TaskStore.deleteTask(demoId)
+    }
+    if (demoId > 0) {
+      this.onboardingDemoTaskId = demoId
+    }
   }
 
   private parseLength(value: Length | undefined): number {
@@ -171,9 +199,10 @@ struct Index {
   }
 
   private areaToRect(newArea: Area): OnboardingRect {
+    const pos = newArea.globalPosition ?? newArea.position
     return {
-      x: this.parseLength(newArea.position?.x),
-      y: this.parseLength(newArea.position?.y),
+      x: this.parseLength(pos?.x),
+      y: this.parseLength(pos?.y) - 40,
       width: this.parseLength(newArea.width),
       height: this.parseLength(newArea.height)
     }
@@ -216,10 +245,17 @@ struct Index {
     if (step.isSetup) {
       return false
     }
-    if (!shouldShowOnboarding(this.hasSeenOnboarding)) {
+    if (!shouldShowOnboarding(this.hasSeenOnboarding, this.onboardingDisabled)) {
       return false
     }
     return step.route === route
+  }
+
+  private isOnboardingActive(): boolean {
+    if (this.onboardingStepId === '') {
+      return false
+    }
+    return shouldShowOnboarding(this.hasSeenOnboarding, this.onboardingDisabled)
   }
 
   private handleOnboardingAdvance() {
@@ -251,11 +287,12 @@ struct Index {
 
   private endOnboarding() {
     this.hasSeenOnboarding = true
+    this.onboardingDisabled = true
     this.onboardingStepId = ''
   }
 
   private async ensureOnboardingSetup() {
-    if (!shouldShowOnboarding(this.hasSeenOnboarding)) {
+    if (!shouldShowOnboarding(this.hasSeenOnboarding, this.onboardingDisabled)) {
       return
     }
     if (this.onboardingStepId === '') {
@@ -498,7 +535,10 @@ struct Index {
                     .shadow(Theme.SHADOW_SMALL)
                     .onAreaChange((_, newArea) => {
                       if (task.id === this.onboardingDemoTaskId) {
-                        this.updateOnboardingTarget('home_demo_task_row', newArea)
+                        const rect = this.areaToRect(newArea)
+                        //rect.y += 80  //task
+                        //rect.x += 15
+                        this.updateOnboardingRect('home_demo_task_row', rect)
                       }
                     })
                     .onClick(() => {
@@ -529,7 +569,12 @@ struct Index {
           .width('100%')
           .height('100%')
           .onAreaChange((_, newArea) => {
-            this.updateOnboardingTarget('home_list_area', newArea)
+            const rect2 = this.areaToRect(newArea)
+            rect2.width = Math.max(0, rect2.width - 10)
+            rect2.x += 5
+            //rect2.y += 10 //to do list
+            //rect2.height += 30
+            this.updateOnboardingRect('home_list_area', rect2)
           })
           .position({ x: 0, y: 0 })
       Column({ space: 12 }) {

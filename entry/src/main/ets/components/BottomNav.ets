@@ -143,9 +143,10 @@ export struct BottomNav {
   }
 
   private areaToRect(newArea: Area): OnboardingRect {
+    const pos = newArea.globalPosition ?? newArea.position
     return {
-      x: this.parseLength(newArea.position?.x),
-      y: this.parseLength(newArea.position?.y),
+      x: this.parseLength(pos?.x),
+      y: this.parseLength(pos?.y) - 46,
       width: this.parseLength(newArea.width),
       height: this.parseLength(newArea.height)
     }
