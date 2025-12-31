@@ -13,7 +13,9 @@ import { Theme } from '../common/theme'
 import { Logger } from '../common/logger'
 import { SettingsService } from '../services/SettingsService'
 import { NotificationService } from '../services/NotificationService'
+import { AppLifecycleService } from '../services/AppLifecycleService'
 import common from '@ohos.app.ability.common'
+import Want from '@ohos.app.ability.Want'
 import {
   DEMO_TASK_DESCRIPTION,
   DEMO_TASK_TITLE,
@@ -50,6 +52,7 @@ struct Index {
   @State isEditMode: boolean = false
   @State deleteTarget: Task | null = null
   @State showNotificationPermissionDialog: boolean = false
+  @StorageLink('pendingNotificationPermission') pendingNotificationPermission: boolean = false
   // 动画相关状态
   @State headerOpacity: number = 0
   @State listItemsLoaded: boolean = false
@@ -98,6 +101,7 @@ struct Index {
     this.taskState = TaskStore.getState()
     this.routeToBreakEndIfNeeded()
     this.routeToStartRestIfNeeded()
+    this.showPendingNotificationPermissionIfNeeded()
   }
 
   aboutToDisappear() {
@@ -107,6 +111,10 @@ struct Index {
   private async ensureNotificationPermission() {
     const enabled = await NotificationService.isEnabled()
     if (!enabled) {
+      if (shouldShowOnboarding(this.hasSeenOnboarding, this.onboardingDisabled)) {
+        this.pendingNotificationPermission = true
+        return
+      }
       this.showNotificationPermissionDialog = true
     }
   }
@@ -289,6 +297,21 @@ struct Index {
     this.hasSeenOnboarding = true
     this.onboardingDisabled = true
     this.onboardingStepId = ''
+    this.showPendingNotificationPermissionIfNeeded()
+  }
+
+  private showPendingNotificationPermissionIfNeeded() {
+    if (!this.pendingNotificationPermission) {
+      return
+    }
+    if (shouldShowOnboarding(this.hasSeenOnboarding, this.onboardingDisabled)) {
+      return
+    }
+    if (this.showNotificationPermissionDialog) {
+      return
+    }
+    this.pendingNotificationPermission = false
+    this.showNotificationPermissionDialog = true
   }
 
   private async ensureOnboardingSetup() {
@@ -812,8 +835,8 @@ struct Index {
             .shadow(Theme.SHADOW_MEDIUM)
             .onClick(async () => {
               const context = getContext(this) as common.UIAbilityContext
-              await NotificationService.requestEnable(context)
               this.showNotificationPermissionDialog = false
+              await this.requestNotificationPermissionWithFallback(context)
             })
         }
         .width('100%')
@@ -832,6 +855,92 @@ struct Index {
     }
     .width('100%')
     .height('100%')
+  }
+
+  private async requestNotificationPermissionWithFallback(context: common.UIAbilityContext) {
+    try {
+      await NotificationService.requestEnable(context)
+    } catch (error) {
+      Logger.warn('Notification permission request failed', JSON.stringify(error))
+    }
+    const enabled = await NotificationService.isEnabled()
+    if (enabled) {
+      return
+    }
+    await this.openAppSettingsForNotifications(context)
+  }
+
+  private async openAppSettingsForNotifications(context: common.UIAbilityContext): Promise<void> {
+    try {
+      const bundleName = context.abilityInfo.bundleName
+      const want: Want = {
+        action: 'action.settings.app.info',
+        uri: 'application_info_entry',
+        parameters: {
+          pushParams: bundleName
+        }
+      }
+      const didBackground = await this.tryOpenSettingsWithLifecycle(context, want)
+      if (didBackground) {
+        Logger.info('Opened app settings for notifications')
+        return
+      }
+      //this.openSystemSettingsFallback(context)
+    } catch (error) {
+      Logger.error('Failed to open app settings', JSON.stringify(error))
+      //this.openSystemSettingsFallback(context)
+    }
+  }
+
+  private openSystemSettingsFallback(context: common.UIAbilityContext) {
+    try {
+      const want: Want = {
+        bundleName: 'com.huawei.hmos.settings',
+        abilityName: 'com.huawei.hmos.settings.MainAbility'
+      }
+      context.startAbility(want).then(() => {
+        Logger.info('Opened system settings main page')
+      }).catch((err: Error) => {
+        Logger.error('Fallback settings open failed', JSON.stringify(err))
+      })
+    } catch (error) {
+      Logger.error('Fallback settings open error', JSON.stringify(error))
+    }
+  }
+
+  private async tryOpenSettingsWithLifecycle(context: common.UIAbilityContext, want: Want): Promise<boolean> {
+    return new Promise((resolve) => {
+      let done = false
+      const listener = (event: 'foreground' | 'background' | 'destroy') => {
+        if (event !== 'background' || done) {
+          return
+        }
+        done = true
+        AppLifecycleService.unregister(listener)
+        resolve(true)
+      }
+      AppLifecycleService.register(listener)
+      context.startAbility(want).then(() => {
+        if (done) {
+          return
+        }
+        setTimeout(() => {
+          if (done) {
+            return
+          }
+          done = true
+          AppLifecycleService.unregister(listener)
+          resolve(false)
+        }, 1200)
+      }).catch(() => {
+        if (done) {
+          return
+        }
+        done = true
+        AppLifecycleService.unregister(listener)
+        resolve(false)
+      })
+    })
   }
 
   private formatDuration(ms: number): string {
