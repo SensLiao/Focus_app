@@ -20,6 +20,8 @@ import { OnboardingOverlay } from '../components/OnboardingOverlay'
 import {
   getOnboardingStep,
   getOnboardingTarget,
+  DEMO_TASK_DESCRIPTION,
+  DEMO_TASK_TITLE,
   OnboardingRect,
   OnboardingTargets,
   shouldShowOnboarding,
@@ -84,9 +86,12 @@ struct FocusPage {
   @State headerOpacity: number = 0
   @State contentOpacity: number = 0
   @StorageLink('hasSeenOnboarding') hasSeenOnboarding: boolean = false
+  @StorageLink('onboardingDisabled') onboardingDisabled: boolean = false
   @StorageLink('onboardingStepId') onboardingStepId: string = ''
   @StorageLink('onboardingAdvanceTick') onboardingAdvanceTick: number = 0
   @StorageLink('onboardingSkipTick') onboardingSkipTick: number = 0
+  @StorageLink('onboardingDemoTaskId') onboardingDemoTaskId: number = -1
+  @StorageLink('onboardingSkipped') onboardingSkipped: boolean = false
   @State onboardingTargets: OnboardingTargets = new OnboardingTargets()
   @State lastAdvanceTick: number = 0
   @State lastSkipTick: number = 0
@@ -232,7 +237,7 @@ struct FocusPage {
       }
       if (this.onboardingSkipTick !== this.lastSkipTick) {
         this.lastSkipTick = this.onboardingSkipTick
-        this.endOnboarding()
+        void this.handleOnboardingSkip()
       }
     }, 150)
   }
@@ -243,6 +248,32 @@ struct FocusPage {
     }
     clearInterval(this.onboardingTickTimer)
     this.onboardingTickTimer = -1
+  }
+
+  private async handleOnboardingSkip() {
+    this.onboardingSkipped = true
+    this.endOnboarding()
+    await this.cleanupDemoTask()
+    router.replaceUrl({ url: 'pages/Index' })
+  }
+
+  private async cleanupDemoTask() {
+    let demoId = this.onboardingDemoTaskId
+    if (demoId <= 0) {
+      const existing = TaskStore.getState().tasks.find((task) => task.title === DEMO_TASK_TITLE && task.description === DEMO_TASK_DESCRIPTION)
+      if (existing) {
+        demoId = existing.id
+      }
+    }
+    if (demoId > 0) {
+      if (this.focusState.currentTaskId === demoId) {
+        await FocusStore.endSessionByPause()
+      }
+      await TaskStore.deleteTask(demoId)
+    }
+    if (demoId > 0) {
+      this.onboardingDemoTaskId = demoId
+    }
   }
 
   private parseLength(value: Length | undefined): number {
@@ -260,9 +291,10 @@ struct FocusPage {
   }
 
   private areaToRect(newArea: Area): OnboardingRect {
+    const pos = newArea.globalPosition ?? newArea.position
     return {
-      x: this.parseLength(newArea.position?.x),
-      y: this.parseLength(newArea.position?.y),
+      x: this.parseLength(pos?.x),
+      y: this.parseLength(pos?.y) - 40,
       width: this.parseLength(newArea.width),
       height: this.parseLength(newArea.height)
     }
@@ -270,6 +302,10 @@ struct FocusPage {
 
   private updateOnboardingTarget(targetId: string, newArea: Area) {
     const rect = this.areaToRect(newArea)
+    this.onboardingTargets = updateOnboardingTargets(this.onboardingTargets, targetId, rect)
+  }
+
+  private updateOnboardingRect(targetId: string, rect: OnboardingRect) {
     this.onboardingTargets = updateOnboardingTargets(this.onboardingTargets, targetId, rect)
   }
 
@@ -287,7 +323,7 @@ struct FocusPage {
 
   private shouldShowOnboardingForRoute(route: string): boolean {
     const step = this.getCurrentOnboardingStep()
-    if (!step || !shouldShowOnboarding(this.hasSeenOnboarding)) {
+    if (!step || !shouldShowOnboarding(this.hasSeenOnboarding, this.onboardingDisabled)) {
       return false
     }
     if (step.isSetup) {
@@ -336,6 +372,7 @@ struct FocusPage {
         return
       case 's7_complete_task':
         void this.onFinish()
+        this.onboardingSkipped = false
         this.onboardingStepId = 's8_history_entry'
         return
       default:
@@ -345,6 +382,7 @@ struct FocusPage {
 
   private endOnboarding() {
     this.hasSeenOnboarding = true
+    this.onboardingDisabled = true
     this.onboardingStepId = ''
   }
 
@@ -973,7 +1011,9 @@ struct FocusPage {
               }
               }
               .onAreaChange((_, newArea) => {
-                this.updateOnboardingTarget('timer_display_area', newArea)
+                const rect = this.areaToRect(newArea)
+                // rect.y += 70 //timer
+                this.updateOnboardingRect('timer_display_area', rect)
               })
               .margin({ top: 0 })
           }
@@ -1047,7 +1087,11 @@ struct FocusPage {
                   .shadow(Theme.SHADOW_GLOW)
                   .enabled(!this.isFinishing)
                   .onAreaChange((_, newArea) => {
-                    this.updateOnboardingTarget('timer_start_focus_button', newArea)
+                    const rect2 = this.areaToRect(newArea)
+                    // rect2.y += 370 // start focus button
+                    // rect2.height += 10
+                    this.updateOnboardingRect('timer_start_focus_button', rect2)
+
                   })
                   .onClick(() => {
                     this.startSession()
@@ -1073,7 +1117,10 @@ struct FocusPage {
                   })
                   .enabled(!this.isFinishing)
                   .onAreaChange((_, newArea) => {
-                    this.updateOnboardingTarget('timer_end_rest_button', newArea)
+                    const rect3 = this.areaToRect(newArea)
+                    // rect3.y += 400 // start focus button
+                    // rect3.height += 20
+                    this.updateOnboardingRect('timer_end_rest_button', rect3)
                   })
                   .onClick(() => {
                     this.onFinishBreak()
@@ -1094,7 +1141,10 @@ struct FocusPage {
                     .backgroundColor(Theme.COLOR_WARNING_BG)
                     .enabled(!this.isFinishing)
                     .onAreaChange((_, newArea) => {
-                      this.updateOnboardingTarget('timer_rest_button', newArea)
+                      const rect4 = this.areaToRect(newArea)
+                      // rect4.y += 400 // start focus button
+                      // rect4.x += 20
+                      this.updateOnboardingRect('timer_rest_button', rect4)
                     })
                     .onClick(() => {
                       this.onStartBreak(false)
@@ -1110,7 +1160,10 @@ struct FocusPage {
                   .backgroundColor(Theme.COLOR_BACKGROUND)
                   .enabled(!this.isFinishing)
                   .onAreaChange((_, newArea) => {
-                    this.updateOnboardingTarget('timer_pause_button', newArea)
+                    const rect5 = this.areaToRect(newArea)
+                    // rect5.y += 400 // start focus button
+                    // rect5.x += 20
+                    this.updateOnboardingRect('timer_pause_button', rect5)
                   })
                   .onClick(() => {
                     if (this.isRunning()) {
@@ -1130,7 +1183,10 @@ struct FocusPage {
                     .shadow(Theme.SHADOW_GLOW)
                     .enabled(!this.isFinishing)
                     .onAreaChange((_, newArea) => {
-                      this.updateOnboardingTarget('timer_complete_button', newArea)
+                      const rect6 = this.areaToRect(newArea)
+                      // rect6.y += 400 // start focus button
+                      // rect6.x += 20
+                      this.updateOnboardingRect('timer_complete_button', rect6)
                     })
                     .onClick(() => {
                       this.onFinish()

@@ -16,7 +16,7 @@ import { SessionStatus } from '../model/SessionStatus'
 import { BottomNav } from '../components/BottomNav'
 import { OnboardingOverlay } from '../components/OnboardingOverlay'
 import { Theme } from '../common/theme'
-import { getOnboardingStep, shouldShowOnboarding } from '../onboarding/OnboardingFlow'
+import { getOnboardingStep, OnboardingRect, shouldShowOnboarding } from '../onboarding/OnboardingFlow'
 
 class FocusSessionCopy implements FocusSession {
   id: number
@@ -77,6 +77,7 @@ struct HistoryPage {
   @State hourlyRest: number[] = []
   @State headerOpacity: number = 0
   @State contentOpacity: number = 0
+  @State screenWidth: number = 0
   private readonly chartHeight: number = 140
   private readonly axisBaselineOffset: number = 5
   private readonly chartMaxMinutes: number = 60
@@ -87,9 +88,13 @@ struct HistoryPage {
   @State panOffsetX: number = 0
   private readonly swipeThreshold: number = 80
   @StorageLink('hasSeenOnboarding') hasSeenOnboarding: boolean = false
+  @StorageLink('onboardingDisabled') onboardingDisabled: boolean = false
   @StorageLink('onboardingStepId') onboardingStepId: string = ''
   @StorageLink('onboardingAdvanceTick') onboardingAdvanceTick: number = 0
   @StorageLink('onboardingSkipTick') onboardingSkipTick: number = 0
+  @StorageLink('onboardingDemoTaskId') onboardingDemoTaskId: number = -1
+  @StorageLink('onboardingSkipped') onboardingSkipped: boolean = false
+  @State historyListRect: OnboardingRect = { x: 0, y: 0, width: 0, height: 0 }
   @State lastAdvanceTick: number = 0
   @State lastSkipTick: number = 0
   private onboardingTickTimer: number = -1
@@ -123,6 +128,9 @@ struct HistoryPage {
   }
 
   private handleSwipeGesture(offsetX: number, velocity: number) {
+    if (this.isOnboardingActive()) {
+      return
+    }
     const absOffset = Math.abs(offsetX)
     const absVelocity = Math.abs(velocity)
     
@@ -135,6 +143,30 @@ struct HistoryPage {
         // 向左滑动 - 切换到首页
         router.replaceUrl({ url: 'pages/Index' })
       }
+    }
+  }
+
+  private parseLength(value: Length | undefined): number {
+    if (value === undefined) {
+      return 0
+    }
+    if (typeof value === 'number') {
+      return value
+    }
+    if (typeof value === 'string') {
+      const parsed = Number.parseFloat(value)
+      return Number.isNaN(parsed) ? 0 : parsed
+    }
+    return 0
+  }
+
+  private areaToRect(newArea: Area): OnboardingRect {
+    const pos = newArea.globalPosition ?? newArea.position
+    return {
+      x: this.parseLength(pos?.x),
+      y: this.parseLength(pos?.y) - 45,
+      width: this.parseLength(newArea.width),
+      height: this.parseLength(newArea.height)
     }
   }
 
@@ -156,7 +188,7 @@ struct HistoryPage {
       }
       if (this.onboardingSkipTick !== this.lastSkipTick) {
         this.lastSkipTick = this.onboardingSkipTick
-        this.endOnboarding()
+        void this.handleOnboardingSkip()
       }
     }, 150)
   }
@@ -167,6 +199,23 @@ struct HistoryPage {
     }
     clearInterval(this.onboardingTickTimer)
     this.onboardingTickTimer = -1
+  }
+
+  private async handleOnboardingSkip() {
+    this.onboardingSkipped = true
+    this.endOnboarding()
+    await this.cleanupDemoTask()
+    router.replaceUrl({ url: 'pages/Index' })
+  }
+
+  private async cleanupDemoTask() {
+    const demoId = this.onboardingDemoTaskId
+    if (demoId > 0) {
+      await TaskRepo.delete(getContext(this), demoId)
+    }
+    if (demoId > 0) {
+      this.onboardingDemoTaskId = demoId
+    }
   }
 
   private getCurrentOnboardingStep() {
@@ -181,10 +230,38 @@ struct HistoryPage {
     if (step.isSetup) {
       return false
     }
-    if (!shouldShowOnboarding(this.hasSeenOnboarding)) {
+    if (!shouldShowOnboarding(this.hasSeenOnboarding, this.onboardingDisabled)) {
       return false
     }
     return step.route === route
+  }
+
+  private getCurrentOnboardingTarget(): OnboardingRect | undefined {
+    const step = this.getCurrentOnboardingStep()
+    if (!step?.targetId) {
+      return undefined
+    }
+    if (step.targetId === 'history_list_area') {
+      if (this.historyListRect.width <= 0 || this.historyListRect.height <= 0) {
+        return undefined
+      }
+      const baseWidth = this.screenWidth > 0 ? this.screenWidth : this.historyListRect.width
+      const width = Math.max(0, baseWidth - 10)
+      return {
+        x: 5,
+        y: this.historyListRect.y,
+        width,
+        height: this.historyListRect.height
+      }
+    }
+    return undefined
+  }
+
+  private isOnboardingActive(): boolean {
+    if (this.onboardingStepId === '') {
+      return false
+    }
+    return shouldShowOnboarding(this.hasSeenOnboarding, this.onboardingDisabled)
   }
 
   private handleOnboardingAdvance() {
@@ -193,12 +270,14 @@ struct HistoryPage {
       return
     }
     if (step.id === 'end_history_page') {
+      this.onboardingSkipped = false
       this.endOnboarding()
     }
   }
 
   private endOnboarding() {
     this.hasSeenOnboarding = true
+    this.onboardingDisabled = true
     this.onboardingStepId = ''
   }
 
@@ -304,12 +383,16 @@ struct HistoryPage {
           visible: true,
           body: this.getCurrentOnboardingStep()?.body ?? '',
           rule: this.getCurrentOnboardingStep()?.rule ?? 'TAP_ANYWHERE_EXCEPT_SKIP',
+          target: this.getCurrentOnboardingTarget(),
           showSkip: true
         })
       }
     }
     .width('100%')
     .height('100%')
+    .onAreaChange((_, newArea) => {
+      this.screenWidth = this.parseLength(newArea.width)
+    })
   }
 
   @Builder
@@ -351,6 +434,9 @@ struct HistoryPage {
               }
             }, (session: FocusSession) => session.id.toString())
           }
+          .onAreaChange((_, newArea) => {
+            this.historyListRect = this.areaToRect(newArea)
+          })
           .width('100%')
         }
       }
@@ -750,8 +836,12 @@ struct HistoryPage {
     this.loading = true
     const sessionsResult = await SessionRepo.findCompleted(getContext(this), 200)
     if (sessionsResult.ok && sessionsResult.data) {
-      this.completedSessions = sessionsResult.data
-      await this.loadTaskMap(sessionsResult.data)
+      const demoId = this.onboardingDemoTaskId
+      const filtered = this.onboardingSkipped && demoId > 0
+        ? sessionsResult.data.filter((session) => session.taskId !== demoId)
+        : sessionsResult.data
+      this.completedSessions = filtered
+      await this.loadTaskMap(filtered)
     }
     if (this.appliedDate) {
       await this.loadHourlyDataForDate(this.appliedDate)

@@ -28,7 +28,7 @@ export struct OnboardingOverlay {
   @State skipRect: OnboardingRect = { x: 0, y: 0, width: 0, height: 0 }
   @State hasSkipRect: boolean = false
 
-  private readonly dimColor: string = '#000000A6'
+  private readonly dimColor: string = '#c99b9bb3'
   private readonly highlightPadding: number = 6
   private readonly highlightBorderWidth: number = 2
   private readonly bubbleWidthMax: number = 300
@@ -82,11 +82,13 @@ export struct OnboardingOverlay {
       return { x, y, width, height }
     }
 
-    const preferBelow = target.y + target.height + height + 16 <= safeHeight
-    const y = preferBelow
-      ? target.y + target.height + 12
-      : Math.max(this.bubbleMinMargin, target.y - height - 12)
-    const x = this.clamp(target.x + target.width / 2 - width / 2, this.bubbleMinMargin, safeWidth - width - this.bubbleMinMargin)
+    const centerX = target.x + target.width / 2
+    const x = this.clamp(centerX - width / 2, this.bubbleMinMargin, safeWidth - width - this.bubbleMinMargin)
+    const belowY = target.y + target.height + this.bubbleMinMargin
+    const canPlaceBelow = belowY + height <= safeHeight - this.bubbleMinMargin
+    const y = canPlaceBelow
+      ? belowY
+      : this.clamp((safeHeight - height) / 2, this.bubbleMinMargin, safeHeight - height - this.bubbleMinMargin)
     return { x, y, width, height }
   }
 
@@ -190,7 +192,7 @@ export struct OnboardingOverlay {
               width: this.highlightBorderWidth,
               color: Theme.COLOR_PRIMARY
             })
-            .borderRadius(Theme.BORDER_RADIUS_MEDIUM)
+            .borderRadius(0)
             .position({ x: this.getHighlightX(), y: this.getHighlightY() })
         } else {
           Column()

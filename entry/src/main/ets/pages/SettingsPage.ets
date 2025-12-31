@@ -7,6 +7,7 @@ import { BottomNav } from '../components/BottomNav'
 import { NumberSelector } from '../components/NumberSelector'
 import { Theme } from '../common/theme'
 import { SettingsService } from '../services/SettingsService'
+import { shouldShowOnboarding } from '../onboarding/OnboardingFlow'
 
 @Entry
 @Component
@@ -26,6 +27,9 @@ struct SettingsPage {
   // 滑动手势相关
   @State panOffsetX: number = 0
   private readonly swipeThreshold: number = 80
+  @StorageLink('hasSeenOnboarding') hasSeenOnboarding: boolean = false
+  @StorageLink('onboardingDisabled') onboardingDisabled: boolean = false
+  @StorageLink('onboardingStepId') onboardingStepId: string = ''
 
   async aboutToAppear() {
     // 初始化设置服务并加载设置
@@ -465,6 +469,9 @@ struct SettingsPage {
   }
 
   private handleSwipeGesture(offsetX: number, velocity: number) {
+    if (this.isOnboardingActive()) {
+      return
+    }
     const absOffset = Math.abs(offsetX)
     const absVelocity = Math.abs(velocity)
     
@@ -478,5 +485,12 @@ struct SettingsPage {
         router.replaceUrl({ url: 'pages/HistoryPage' })
       }
     }
+  }
+
+  private isOnboardingActive(): boolean {
+    if (this.onboardingStepId === '') {
+      return false
+    }
+    return shouldShowOnboarding(this.hasSeenOnboarding, this.onboardingDisabled)
   }
 }
