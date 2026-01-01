@@ -93,7 +93,7 @@ struct SettingsPage {
             Row({ space: 8 }) {
               Text('🔔')
                 .fontSize(Theme.FONT_SIZE_MEDIUM)
-              Text('通知设置')
+              Text('系统设置')
                 .fontSize(Theme.FONT_SIZE_MEDIUM)
                 .fontWeight(FontWeight.Bold)
                 .fontColor(Theme.COLOR_TEXT_PRIMARY)

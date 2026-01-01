@@ -593,7 +593,7 @@ struct Index {
               }
               .width('100%')
               .height('100%')
-              .padding({ left: 16, right: 16, top: 8, bottom: Theme.SPACE_SMALL })
+              .padding({ left: 16, right: 16, top: 0, bottom: 0 })
             }
           }
           .width('100%')
