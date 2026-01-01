@@ -6,7 +6,6 @@ import promptAction from '@ohos.promptAction'
 import { TaskStore, TaskState } from '../store/taskStore'
 import { FocusStore } from '../store/focusStore'
 import { Task } from '../model/Task'
-import { FocusSession } from '../model/FocusSession'
 import { BottomNav } from '../components/BottomNav'
 import { OnboardingOverlay } from '../components/OnboardingOverlay'
 import { Theme } from '../common/theme'
@@ -46,9 +45,6 @@ struct Index {
   @State lastAdvanceTick: number = 0
   @State lastSkipTick: number = 0
   private onboardingTickTimer: number = -1
-  @State showRecoverDialog: boolean = false
-  @State recoveredSession: FocusSession | null = null
-  @State recoveredTaskTitle: string = ''
   @State isEditMode: boolean = false
   @State deleteTarget: Task | null = null
   @State showNotificationPermissionDialog: boolean = false
@@ -71,23 +67,12 @@ struct Index {
     await SettingsService.init(getContext(this))
     await this.ensureNotificationPermission()
 
+    await FocusStore.reconcileActiveSessions()
     await TaskStore.loadTasks()
     this.taskState = TaskStore.getState()
     await this.ensureOnboardingSetup()
     this.startOnboardingTickMonitor()
 
-    const recoverResult = await FocusStore.checkAndRecoverSession()
-    if (recoverResult.ok && recoverResult.data !== null && recoverResult.data !== undefined) {
-      this.recoveredSession = recoverResult.data
-      if (this.recoveredSession && this.recoveredSession.taskId) {
-        const task = TaskStore.findTask(this.recoveredSession.taskId)
-        this.recoveredTaskTitle = task?.title ?? '匿名专注'
-      } else {
-        this.recoveredTaskTitle = '匿名专注'
-      }
-    }
-
-    // 入场动画
     setTimeout(() => {
       this.headerOpacity = 1
     }, 100)
@@ -657,9 +642,6 @@ struct Index {
       .height('100%')
       .backgroundColor(Theme.COLOR_BACKGROUND)
 
-      if (this.showRecoverDialog) {
-        this.RecoverDialog()
-      }
 
       if (this.showNotificationPermissionDialog) {
         this.NotificationPermissionDialog()
@@ -696,94 +678,6 @@ struct Index {
     if (hour < 14) return '中午好，别忘了休息 🌤️'
     if (hour < 18) return '下午好，保持专注 💪'
     return '晚上好，今天辛苦了 🌟'
-  }
-
-  @Builder
-  RecoverDialog() {
-    Stack() {
-      Column()
-        .width('100%')
-        .height('100%')
-        .backgroundColor(Theme.COLOR_OVERLAY)
-        .onClick(() => {})
-
-      Column({ space: Theme.SPACE_LARGE }) {
-        // 图标
-        Column() {
-          Text('�?')
-            .fontSize(48)
-        }
-        .width(80)
-        .height(80)
-        .borderRadius(40)
-        .backgroundColor(Theme.COLOR_DIVIDER)
-        .justifyContent(FlexAlign.Center)
-        Text('发现未完成的专注')
-          .fontSize(Theme.FONT_SIZE_LARGE)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(Theme.COLOR_TEXT_PRIMARY)
-
-        Column({ space: Theme.SPACE_SMALL }) {
-          Text(`任务: ${this.recoveredTaskTitle}`)
-            .fontSize(Theme.FONT_SIZE_MEDIUM)
-            .fontColor(Theme.COLOR_TEXT_PRIMARY)
-          if (this.recoveredSession) {
-            Text(`专注时长: ${this.formatDuration(this.recoveredSession.actualFocusDuration)}`)
-              .fontSize(Theme.FONT_SIZE_SMALL)
-              .fontColor(Theme.COLOR_TEXT_SECONDARY)
-          }
-
-          Text('上次专注已暂停，是否继续�?')
-            .fontSize(Theme.FONT_SIZE_SMALL)
-            .fontColor(Theme.COLOR_TEXT_TERTIARY)
-            .margin({ top: Theme.SPACE_SMALL })
-        }
-
-        Row({ space: Theme.SPACE_MEDIUM }) {
-          Button('放弃')
-            .fontSize(Theme.FONT_SIZE_MEDIUM)
-            .height(52)
-            .layoutWeight(1)
-            .backgroundColor(Theme.COLOR_BACKGROUND)
-            .fontColor(Theme.COLOR_TEXT_SECONDARY)
-            .borderRadius(Theme.BORDER_RADIUS_LARGE)
-            .onClick(async () => {
-              const session = this.recoveredSession
-              if (session) {
-                await FocusStore.finishFocus()
-              }
-              this.showRecoverDialog = false
-              this.recoveredSession = null
-            })
-
-          Button('继续')
-            .fontSize(Theme.FONT_SIZE_MEDIUM)
-            .height(52)
-            .layoutWeight(1)
-            .backgroundColor(Theme.COLOR_TEXT_PRIMARY)
-            .fontColor(Theme.COLOR_TEXT_ON_PRIMARY)
-            .borderRadius(Theme.BORDER_RADIUS_LARGE)
-            .shadow(Theme.SHADOW_MEDIUM)
-            .onClick(async () => {
-              this.showRecoverDialog = false
-              const session = this.recoveredSession
-              if (session) {
-                await FocusStore.recoverSession(session)
-                router.pushUrl({ url: 'pages/FocusPage' })
-              }
-            })
-        }
-        .width('100%')
-      }
-      .width('85%')
-      .padding(Theme.SPACE_XLARGE)
-      .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
-      .borderRadius(Theme.BORDER_RADIUS_XLARGE)
-      .shadow(Theme.SHADOW_LARGE)
-      .position({ x: '7.5%', y: '30%' })
-    }
-    .width('100%')
-    .height('100%')
   }
 
   @Builder
