@@ -692,10 +692,10 @@ struct Index {
   private getGreeting(): string {
     const hour = new Date().getHours()
     if (hour < 6) return '夜深了，注意休息 🌙'
-    if (hour < 12) return '早上好，开始新的一�?☀�?'
-    if (hour < 14) return '中午好，别忘了休�?🌤�?'
+    if (hour < 12) return '早上好，开始新的一天 ☀️'
+    if (hour < 14) return '中午好，别忘了休息 🌤️'
     if (hour < 18) return '下午好，保持专注 💪'
-    return '晚上好，今天辛苦�?🌟'
+    return '晚上好，今天辛苦了 🌟'
   }
 
   @Builder
