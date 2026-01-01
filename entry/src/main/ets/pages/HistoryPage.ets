@@ -78,11 +78,13 @@ struct HistoryPage {
   @State headerOpacity: number = 0
   @State contentOpacity: number = 0
   @State screenWidth: number = 0
-  private readonly chartHeight: number = 140
+  @State chartHeight: number = 140
   private readonly axisBaselineOffset: number = 5
   private readonly chartMaxMinutes: number = 60
   private readonly chartItemWidth: number = 35
   private readonly chartBarWidth: number = 8
+  private readonly chartXAxisHeight: number = 30
+  private readonly chartLabelHeight: number = 20
   private chartScroller: Scroller = new Scroller()
   // 滑动手势相关
   @State panOffsetX: number = 0
@@ -257,6 +259,14 @@ struct HistoryPage {
     return undefined
   }
 
+  private updateChartHeight(value: Length | undefined): void {
+    const available = this.parseLength(value)
+    const next = Math.max(80, Math.floor(available - this.chartXAxisHeight))
+    if (next > 0 && Math.abs(this.chartHeight - next) >= 1) {
+      this.chartHeight = next
+    }
+  }
+
   private isOnboardingActive(): boolean {
     if (this.onboardingStepId === '') {
       return false
@@ -398,9 +408,14 @@ struct HistoryPage {
   @Builder
   CompletedSessionsContent() {
     Stack() {
-      Column({ space: Theme.SPACE_MEDIUM }) {
+      Column({ space: Theme.SPACE_TINY }) {
         if (this.appliedDate) {
-          this.HourlyChart()
+          Column() {
+            this.HourlyChart()
+          }
+          .layoutWeight(2)
+          .justifyContent(FlexAlign.Start)
+          .margin({ top: Theme.SPACE_TINY })
         }
 
         if (this.getVisibleSessions().length === 0) {
@@ -437,10 +452,14 @@ struct HistoryPage {
           .onAreaChange((_, newArea) => {
             this.historyListRect = this.areaToRect(newArea)
           })
+          .layoutWeight(this.appliedDate ? 3 : 1)
+          .padding({ top: 0, bottom: 0 })
           .width('100%')
         }
       }
       .width('100%')
+      .height('100%')
+      .justifyContent(FlexAlign.Start)
 
       if (this.filterOpen) {
         Column({ space: 16 }) {
@@ -558,11 +577,12 @@ struct HistoryPage {
     }
     .layoutWeight(1)
     .width('100%')
+    .height('100%')
     .padding({
       left: 20,
       right: 20,
-      top: Theme.SPACE_MEDIUM,
-      bottom: Theme.SPACE_MEDIUM
+      top: 0,
+      bottom: 0
     })
   }
 
@@ -658,13 +678,13 @@ struct HistoryPage {
                   .margin({ top: 8 })
               }
               .width(28)
-              .height(this.chartHeight + 20)
+              .height(this.chartHeight + this.chartLabelHeight)
             })
           }
-          .height(this.chartHeight + 30)
+          .height(this.chartHeight + this.chartXAxisHeight)
           .padding({ right: Theme.SPACE_LARGE })
         }
-        .height(this.chartHeight + 30)
+        .height(this.chartHeight + this.chartXAxisHeight)
         .layoutWeight(1)
         .scrollable(ScrollDirection.Horizontal)
         .scrollBar(BarState.On)
@@ -677,6 +697,10 @@ struct HistoryPage {
         })
       }
       .alignItems(VerticalAlign.Top)
+      .layoutWeight(1)
+      .onAreaChange((_, newArea) => {
+        this.updateChartHeight(newArea.height)
+      })
       .width('100%')
       .clip(true)
     }
@@ -819,7 +843,12 @@ struct HistoryPage {
       }
     }
     .width('100%')
-    .padding(Theme.SPACE_LARGE)
+    .padding({
+      left: Theme.SPACE_LARGE,
+      right: Theme.SPACE_LARGE,
+      top: Theme.SPACE_MEDIUM,
+      bottom: Theme.SPACE_MEDIUM
+    })
     .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
     .borderRadius(Theme.BORDER_RADIUS_LARGE)
     .shadow(Theme.SHADOW_MEDIUM)
