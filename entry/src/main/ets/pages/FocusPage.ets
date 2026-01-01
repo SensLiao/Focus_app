@@ -570,12 +570,30 @@ struct FocusPage {
       await this.loadSessionDetails(this.focusState.currentTaskId ?? undefined)
       promptAction.showToast({ message: 'Focus started' })
     } else {
-      if (result.code === 'HAS_ACTIVE_SESSION') {
+      if (result.code === 'HAS_ACTIVE_SESSION' || result.code === 'ALREADY_RUNNING') {
         this.showActiveTaskWarning = true
       } else {
         promptAction.showToast({ message: result.message ?? 'Unable to start focus' })
       }
     }
+  }
+
+  private async jumpToRunningSession() {
+    const recoverResult = await FocusStore.checkAndRecoverSession()
+    if (!recoverResult.ok || !recoverResult.data) {
+      promptAction.showToast({ message: recoverResult.message ?? 'Unable to load running session' })
+      return
+    }
+    await FocusStore.recoverSession(recoverResult.data)
+    this.focusState = FocusStore.getState()
+    this.displayIsBreaking = this.focusState.isBreaking
+    if (!this.syncTaskMeta()) {
+      return
+    }
+    this.isIdle = false
+    this.viewingOtherTask = false
+    this.startTimer()
+    await this.loadSessionDetails(this.focusState.currentTaskId ?? undefined)
   }
 
   private async onPause() {
@@ -1669,23 +1687,38 @@ struct FocusPage {
         .textAlign(TextAlign.Center)
         .lineHeight(24)
 
-      Button('我知道了')
-        .width('100%')
-        .height(52)
-        .fontSize(Theme.FONT_SIZE_MEDIUM)
-        .backgroundColor(Theme.COLOR_PRIMARY)
-        .fontColor(Color.White)
-        .borderRadius(Theme.BORDER_RADIUS_LARGE)
-        .onClick(() => {
-          this.showActiveTaskWarning = false
-        })
+      Column({ space: Theme.SPACE_SMALL }) {
+        Button('前往进行中')
+          .width('100%')
+          .height(52)
+          .fontSize(Theme.FONT_SIZE_MEDIUM)
+          .backgroundColor(Theme.COLOR_TEXT_PRIMARY)
+          .fontColor(Theme.COLOR_TEXT_ON_PRIMARY)
+          .borderRadius(Theme.BORDER_RADIUS_LARGE)
+          .onClick(async () => {
+            this.showActiveTaskWarning = false
+            await this.jumpToRunningSession()
+          })
+
+        Button('我知道了')
+          .width('100%')
+          .height(52)
+          .fontSize(Theme.FONT_SIZE_MEDIUM)
+          .backgroundColor(Theme.COLOR_BACKGROUND)
+          .fontColor(Theme.COLOR_TEXT_SECONDARY)
+          .borderRadius(Theme.BORDER_RADIUS_LARGE)
+          .onClick(() => {
+            this.showActiveTaskWarning = false
+          })
+      }
+      .width('100%')
       }
       .width('85%')
       .padding(Theme.SPACE_XLARGE)
       .backgroundColor(Theme.COLOR_CARD_BACKGROUND)
       .borderRadius(Theme.BORDER_RADIUS_XLARGE)
       .shadow(Theme.SHADOW_LARGE)
-      .position({ x: '7.5%', y: '30%' })
+      .position({ x: '7.5%', y: '22%' })
     }
     .width('100%')
     .height('100%')

@@ -55,6 +55,37 @@ export class FocusStore {
   }
 
   /**
+   * Ensure active_session_id matches an actual running session.
+   */
+  static async reconcileActiveSessions(): Promise<void> {
+    if (!FocusStore.context) {
+      Logger.warn('FocusStore not initialized for reconcile')
+      return
+    }
+
+    const runningResult = await SessionRepo.findRunning(FocusStore.context)
+    if (!runningResult.ok) {
+      Logger.warn('Failed to check running session', runningResult.message ?? 'Unknown error')
+      return
+    }
+
+    const runningSession = runningResult.data
+    if (!runningSession) {
+      const activeTasksResult = await TaskRepo.findWithActiveSession(FocusStore.context)
+      if (activeTasksResult.ok) {
+        for (const task of activeTasksResult.data) {
+          await TaskRepo.updateActiveSession(FocusStore.context, task.id, undefined)
+        }
+      }
+      return
+    }
+
+    if (runningSession.taskId !== undefined) {
+      await TaskRepo.updateActiveSession(FocusStore.context, runningSession.taskId, runningSession.id)
+    }
+  }
+
+  /**
    * 获取状态
    */
   static getState(): FocusState {
