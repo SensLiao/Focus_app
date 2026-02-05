@@ -4,10 +4,10 @@
 
 import router from '@ohos.router'
 import common from '@ohos.app.ability.common'
-import Want from '@ohos.app.ability.Want'
 import { Theme } from '../common/theme'
 import { Logger } from '../common/logger'
 import promptAction from '@ohos.promptAction'
+import { SettingsNavigator } from '../services/SettingsNavigator'
 
 @Entry
 @Component
@@ -404,7 +404,7 @@ struct GuidePage {
           .shadow(Theme.SHADOW_GLOW)
           .onClick(() => {
             this.showSettingsDialog = false
-            this.openAppSettings()
+            void this.openAppSettings()
           })
       }
       .width('100%')
@@ -417,50 +417,18 @@ struct GuidePage {
     .position({ x: '6%', y: '25%' })
   }
 
-  private openAppSettings() {
+  private async openAppSettings() {
     try {
       const context = getContext(this) as common.UIAbilityContext
-      const bundleName = context.abilityInfo.bundleName
-
-      // 跳转到本应用的系统设置页面
-      const want: Want = {
-        action: 'action.settings.app.info',
-        uri: 'application_info_entry',
-        parameters: {
-          pushParams: bundleName
-        }
+      const ok = await SettingsNavigator.openAppSettingsWithFallback(context)
+      if (ok) {
+        Logger.info('成功跳转到系统设置')
+      } else {
+        Logger.error('跳转系统设置失败')
       }
-
-      context.startAbility(want).then(() => {
-        Logger.info('成功跳转到应用设置页面')
-      }).catch((err: Error) => {
-        Logger.error('跳转失败，尝试备用方式', JSON.stringify(err))
-        // 备用方式：尝试直接打开系统设置
-        this.openSystemSettingsFallback(context)
-      })
     } catch (error) {
       Logger.error('打开系统设置失败', JSON.stringify(error))
       promptAction.showToast({ message: '无法打开系统设置，请手动前往' })
-    }
-  }
-
-  private openSystemSettingsFallback(context: common.UIAbilityContext) {
-    try {
-      // 备用方式：打开系统设置主页
-      const want: Want = {
-        bundleName: 'com.huawei.hmos.settings',
-        abilityName: 'com.huawei.hmos.settings.MainAbility'
-      }
-      context.startAbility(want).then(() => {
-        Logger.info('成功打开系统设置主页')
-        promptAction.showToast({ message: '请在设置中找到本应用进行配置' })
-      }).catch((err: Error) => {
-        Logger.error('备用方式也失败', JSON.stringify(err))
-        promptAction.showToast({ message: '无法打开系统设置，请手动前往设置 > 应用' })
-      })
-    } catch (error) {
-      Logger.error('备用方式异常', JSON.stringify(error))
-      promptAction.showToast({ message: '请手动前往 设置 > 应用 > 专注' })
     }
   }
 }

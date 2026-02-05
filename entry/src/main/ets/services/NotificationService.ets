@@ -16,6 +16,15 @@ const BACKGROUND_NOTIFICATION_SLOT: notificationManager.SlotType = notificationM
 export class NotificationService {
   private static initialized: boolean = false;
 
+  private static async isEnabledStrict(): Promise<boolean> {
+    try {
+      return await notificationManager.isNotificationEnabled();
+    } catch (error) {
+      Logger.warn('Failed to read notification permission status (strict)', error.toString());
+      return false;
+    }
+  }
+
   static async init(context: common.UIAbilityContext): Promise<void> {
     if (NotificationService.initialized) {
       return;
@@ -51,6 +60,20 @@ export class NotificationService {
     } catch (error) {
       Logger.warn('Notification permission request failed', error.toString());
     }
+  }
+
+  static async requestEnableWithResult(context: common.UIAbilityContext): Promise<boolean> {
+    const alreadyEnabled = await NotificationService.isEnabledStrict();
+    if (alreadyEnabled) {
+      return true;
+    }
+    try {
+      await notificationManager.requestEnableNotification(context);
+    } catch (error) {
+      Logger.warn('Notification permission request failed', error.toString());
+    }
+    await new Promise<void>((resolve) => setTimeout(() => resolve(), 250));
+    return await NotificationService.isEnabledStrict();
   }
 
   static async publishBackgroundExit(): Promise<void> {

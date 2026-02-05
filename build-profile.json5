@@ -1,6 +1,20 @@
 {
   "app": {
-    "signingConfigs": [],
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "/Users/developer/.ohos/config/default_Focus_app_9MvKyTFzyrVxko_I6tTW9TkLeHWpqoaOtYjIb_V5qhw=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "REDACTED",
+          "profile": "/Users/developer/.ohos/config/default_Focus_app_9MvKyTFzyrVxko_I6tTW9TkLeHWpqoaOtYjIb_V5qhw=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "/Users/developer/.ohos/config/default_Focus_app_9MvKyTFzyrVxko_I6tTW9TkLeHWpqoaOtYjIb_V5qhw=.p12",
+          "storePassword": "REDACTED"
+        }
+      }
+    ],
     "products": [
       {
         "name": "default",

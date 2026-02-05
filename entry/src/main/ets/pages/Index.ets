@@ -12,9 +12,8 @@ import { Theme } from '../common/theme'
 import { Logger } from '../common/logger'
 import { SettingsService } from '../services/SettingsService'
 import { NotificationService } from '../services/NotificationService'
-import { AppLifecycleService } from '../services/AppLifecycleService'
+import { OpenOptions, SettingsNavigator } from '../services/SettingsNavigator'
 import common from '@ohos.app.ability.common'
-import Want from '@ohos.app.ability.Want'
 import {
   DEMO_TASK_DESCRIPTION,
   DEMO_TASK_TITLE,
@@ -759,12 +758,13 @@ struct Index {
   }
 
   private async requestNotificationPermissionWithFallback(context: common.UIAbilityContext) {
+    let enabled = false
     try {
-      await NotificationService.requestEnable(context)
+      enabled = await NotificationService.requestEnableWithResult(context)
     } catch (error) {
       Logger.warn('Notification permission request failed', JSON.stringify(error))
+      enabled = false
     }
-    const enabled = await NotificationService.isEnabled()
     if (enabled) {
       return
     }
@@ -773,75 +773,14 @@ struct Index {
 
   private async openAppSettingsForNotifications(context: common.UIAbilityContext): Promise<void> {
     try {
-      const bundleName = context.abilityInfo.bundleName
-      const want: Want = {
-        action: 'action.settings.app.info',
-        uri: 'application_info_entry',
-        parameters: {
-          pushParams: bundleName
-        }
-      }
-      const didBackground = await this.tryOpenSettingsWithLifecycle(context, want)
-      if (didBackground) {
+      const options: OpenOptions = { verifyBackground: true }
+      const ok = await SettingsNavigator.openAppSettingsWithFallback(context, options)
+      if (ok) {
         Logger.info('Opened app settings for notifications')
-        return
       }
-      //this.openSystemSettingsFallback(context)
     } catch (error) {
       Logger.error('Failed to open app settings', JSON.stringify(error))
-      //this.openSystemSettingsFallback(context)
     }
-  }
-
-  private openSystemSettingsFallback(context: common.UIAbilityContext) {
-    try {
-      const want: Want = {
-        bundleName: 'com.huawei.hmos.settings',
-        abilityName: 'com.huawei.hmos.settings.MainAbility'
-      }
-      context.startAbility(want).then(() => {
-        Logger.info('Opened system settings main page')
-      }).catch((err: Error) => {
-        Logger.error('Fallback settings open failed', JSON.stringify(err))
-      })
-    } catch (error) {
-      Logger.error('Fallback settings open error', JSON.stringify(error))
-    }
-  }
-
-  private async tryOpenSettingsWithLifecycle(context: common.UIAbilityContext, want: Want): Promise<boolean> {
-    return new Promise((resolve) => {
-      let done = false
-      const listener = (event: 'foreground' | 'background' | 'destroy') => {
-        if (event !== 'background' || done) {
-          return
-        }
-        done = true
-        AppLifecycleService.unregister(listener)
-        resolve(true)
-      }
-      AppLifecycleService.register(listener)
-      context.startAbility(want).then(() => {
-        if (done) {
-          return
-        }
-        setTimeout(() => {
-          if (done) {
-            return
-          }
-          done = true
-          AppLifecycleService.unregister(listener)
-          resolve(false)
-        }, 1200)
-      }).catch(() => {
-        if (done) {
-          return
-        }
-        done = true
-        AppLifecycleService.unregister(listener)
-        resolve(false)
-      })
-    })
   }
 
   private formatDuration(ms: number): string {
@@ -950,4 +889,3 @@ struct Index {
     }
   }
 }
-
