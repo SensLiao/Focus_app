@@ -1,17 +1,6 @@
 <div align="right"><a href="README.zh-CN.md">简体中文</a></div>
 
-<p align="center"><img src="docs/hero.png" alt="Focus banner" width="100%"></p>
-
-<p align="center"><b>A focus timer that survives interruptions.</b></p>
-
-<p align="center">
-<img src="https://img.shields.io/badge/HarmonyOS-Stage%20Model-fbbf24?style=flat-square" alt="HarmonyOS Stage Model">
-<img src="https://img.shields.io/badge/ArkTS-ArkUI-fbbf24?style=flat-square" alt="ArkTS ArkUI">
-<img src="https://img.shields.io/badge/SDK-6.0.1-fbbf24?style=flat-square" alt="SDK 6.0.1">
-<img src="https://img.shields.io/badge/RelationalStore-RDB%20v3-fbbf24?style=flat-square" alt="RelationalStore RDB v3">
-<img src="https://img.shields.io/badge/License-MIT-22c55e?style=flat-square" alt="License MIT">
-<img src="https://img.shields.io/badge/Status-MVP-64748b?style=flat-square" alt="Status MVP">
-</p>
+<p align="center"><img src="docs/hero.png" alt="Focus — a HarmonyOS focus timer that survives interruptions" width="100%"></p>
 
 Focus is a HarmonyOS focus timer and task manager built with ArkTS/ArkUI on the Stage model. It links every focus timer to a real task, auto-pauses when the app leaves the foreground, and recovers cleanly after a process kill so a session's history is never silently lost. It is for anyone who wants a focus tool that behaves correctly across real-world interruptions — backgrounding, breaks, and system-initiated termination.
 
@@ -24,15 +13,14 @@ Focus is a HarmonyOS focus timer and task manager built with ArkTS/ArkUI on the 
 - **Store-pattern state layer** — static-class singletons over an `@Observed` state object, with a `Result<T>` success/error envelope for predictable data flow.
 - **Repaint-efficient timer** — timer ticks update only local state, avoiding full-page repaints every second.
 
-## 🏗 How it works
+## 🏗 Architecture
 
-Focus is organised in three layers:
+<p align="center"><img src="docs/architecture.png" alt="Focus architecture: a one-way UI → Store → Services → RDB stack, with the lifecycle service driving auto-pause and kill-recovery" width="100%"></p>
+<p align="center"><sub>A one-way layered stack, with the lifecycle service that turns interruptions into recorded state.</sub></p>
 
-- **UI (ArkUI):** page components that render task lists, the focus/break timer, and session history.
-- **State (Store pattern):** static-class singleton stores wrap an `@Observed` state object and expose actions that return a `Result<T>` envelope; timer ticks are kept in local state to avoid re-rendering whole pages.
-- **Persistence (RelationalStore):** a versioned RDB schema (DB v3) with foreign keys and indexes, plus idempotent migrations that add columns without destroying existing data.
+Data flows in one direction. ArkUI pages render task lists, the focus/break timer and session history, and never touch the database themselves; they call into the stores. The stores are static-class singletons wrapping an `@Observed` state object, and every action they expose returns a `Result<T>` envelope, so success and failure are handled the same way at every call site. Below them, the timer, reminder and lifecycle services do the work that outlives a single screen, and everything durable lands in a versioned RelationalStore schema (`tasks`, `focus_sessions`, `focus_segments`, `break_events`) with foreign keys, indexes, and idempotent migrations that add columns without destroying existing data.
 
-A lifecycle service ties these together: it observes foreground/background transitions to auto-pause and resume, and reconciles unfinished sessions on startup to deliver kill-recovery.
+The lifecycle service is what makes interruptions survivable. It observes foreground, background and destroy transitions, and turns each into an explicit state change rather than a gap in the record: moving to the background auto-pauses the running session, and returning to the foreground resumes it. If the process is killed outright, the session is reconciled on the next launch — marked `PAUSED` with `interruption_reason = 'APP_KILLED'` — so a killed app leaves an honest history entry instead of an open-ended session.
 
 ## 📸 Screenshots
 
@@ -62,11 +50,7 @@ Prerequisites: DevEco Studio with the HarmonyOS SDK (6.0.1) installed.
 
 ## 🧪 Testing
 
-Unit-test scaffolding is in place using **Hypium** (`@ohos/hypium`). The interruption and process-kill recovery flows were verified on a real device. Broader automated coverage is on the roadmap rather than claimed today.
-
-## 📌 Project status
-
-A working MVP. The core flows — task management, focus/break sessions, background auto-pause, and kill-recovery — function end-to-end; broader automated test coverage is planned.
+Unit-test scaffolding is in place using **Hypium** (`@ohos/hypium`). The interruption and process-kill recovery flows were verified on a real device. Broader automated coverage is not claimed today.
 
 ## 📄 License
 
