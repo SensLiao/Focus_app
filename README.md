@@ -58,7 +58,8 @@ Data flows in one direction, and each layer has exactly one job:
 
 Pages never touch the database; they call stores. Stores own business rules — the single-active-session guard, segment bookkeeping, break accounting — and delegate persistence to the repositories. Services do the work that outlives a single screen: the lifecycle bus receives `foreground` / `background` / `destroy` events from the app ability and routes them into `FocusStore`, which is where interruptions become database writes (see [Interruption model](#-interruption-model)).
 
-<!-- image-slot: docs/lifecycle.png — session lifecycle state diagram: RUNNING/PAUSED/FINISHED with interruption reasons and the launch-time reconciliation pass -->
+<p align="center"><img src="docs/lifecycle.png" alt="Focus session lifecycle: RUNNING, PAUSED and FINISHED with the events that drive them - backgrounding closes the session as FINISHED with USER_PAUSED, a screen-off keeps it running, and a process kill is reconciled on the next launch" width="100%"></p>
+<p align="center"><sub>Every interruption becomes an explicit record — and a process kill, which cannot run code at the time, is reconciled on the next launch instead.</sub></p>
 
 ## 🗃 Data model
 

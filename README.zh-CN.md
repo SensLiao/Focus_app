@@ -58,7 +58,8 @@ Focus 是一款基于 Stage 模型、用 ArkTS/ArkUI 构建的 HarmonyOS 专注�
 
 页面从不接触数据库；它们调用 Store。Store 持有业务规则——单活跃会话守卫、片段记账、休息核算——并把持久化委托给仓储层。Service 做超出单个页面生命周期的工作：生命周期总线接收来自应用 Ability 的 `foreground` / `background` / `destroy` 事件并路由进 `FocusStore`，中断在那里变成数据库写入（见[中断模型](#-中断模型)）。
 
-<!-- image-slot: docs/lifecycle.png — 会话生命周期状态图：RUNNING/PAUSED/FINISHED 与中断原因、启动时对账流程 -->
+<p align="center"><img src="docs/lifecycle.png" alt="Focus 会话生命周期：RUNNING、PAUSED、FINISHED 三个状态及驱动它们的事件——切后台会以 USER_PAUSED 结束会话、熄屏继续运行、进程被杀则在下次启动时对账" width="100%"></p>
+<p align="center"><sub>每一次中断都变成显式记录——而进程被杀时无法执行任何代码，因此改在下次启动时对账。</sub></p>
 
 ## 🗃 数据模型
 
